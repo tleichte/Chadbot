@@ -1,0 +1,90 @@
+import discord
+import traceback
+from discord import Intents
+from discord.ext.commands import Bot, Context, Command, CommandError
+import json
+
+# OPEN INITIAL FILES
+try:
+    with open("configs/main.json", 'r') as config_json:
+        config = json.load(config_json)
+except Exception as e:
+    print(e)
+    print("Config not found!")
+    exit(-1)
+
+intents = Intents.default()
+intents.members = True
+intents.message_content = True
+bot = Bot(command_prefix="!", intents=intents)
+bot.remove_command('help')
+
+async def respond(ctx: Context, message: str):
+    await ctx.send(f"{ctx.author.mention}\n{message}")
+
+async def respond_generic_error(ctx:Context):
+    await respond(ctx, f":grey_question: Sorry, I didn't recognize that. Check *help* to see what I do know.", False)
+
+@bot.hybrid_command()
+async def bedtime(ctx: Context):
+    if await bot.is_owner(ctx.author):
+        print("Owner verified, shutting down")
+        await ctx.send(":yawning_face: :sleeping:")
+        await bot.close()
+        print("Shutdown complete")
+    else:
+        print("User doesn't have kill permission.")
+        await ctx.send(":triumph: You're not the boss of me.")
+
+
+@bot.hybrid_command()
+async def ping(ctx):
+    await ctx.send(f":ping_pong: Pong! ({round(bot.latency*1000)}ms)")
+
+
+@bot.event
+async def on_command_error(ctx:Context, error:CommandError):
+
+    cmd: Command = ctx.command
+
+    if cmd is None:
+        print("Unrecognized command detected; ignoring")
+        return
+
+    print(f"Command error! Message: \"{ctx.message.content}\", Error type: {type(error)}")
+    if isinstance(error, (discord.ext.commands.BadArgument, discord.ext.commands.CommandNotFound, discord.ext.commands.MissingRequiredArgument)):
+        await respond_generic_error(ctx)
+    else:
+        traceback.print_exception(type(error),error,error.__traceback__)
+        await respond(ctx, f"Sorry, something went wrong... I feel like I have butterflies... no, bugs, in my stomach. :sick:", False)
+
+
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name} - {bot.user.id}")
+
+
+@bot.command()
+async def refresh_cog(ctx: Context, cog_str: str):
+    if await bot.is_owner(ctx.author):
+        try:
+            print(f"Owner verified, refreshing cog {cog_str}")
+            bot.reload_extension(f"cogs.{cog_str}")
+            await ctx.send(f"Refreshed cog {cog_str}!")
+        except Exception as refresh_e:
+            print(f"Failed to refresh cog {cog_str}!")
+            print(refresh_e)
+    else:
+        await ctx.send(f"{ctx.author.mention} :triumph: You're not the boss of me!")
+        print("Someone not the bot owner tried to refresh!")
+
+cogs = [
+    "delete",
+    "roles"
+]
+
+for cog in cogs:
+    bot.load_extension(f"cogs.{cog}")
+
+bot.run(config["token"])

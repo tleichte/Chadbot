@@ -1,0 +1,45 @@
+{
+    "color": {
+        "r": 74,
+        "g": 200,
+        "b": 245
+    },
+    "author":{
+        "name": "Tyler Eichten",
+        "icon_url": "https://avatars0.githubusercontent.com/u/25017369",
+        "url": "https://github.com/tleichte"
+    },
+    "title": "Role Help",
+    "description": "Makes it way easier to mention a group of people.",
+    "entries":[
+        {
+            "command": "role help",
+            "description": "Shows this help dialog."
+        },
+        {
+            "command": "role add [role] [description]",
+            "description": "Starts a vote to add the given role. Put quotation marks around multi-word roles and the description. (Ex: !role add \"Example Role\" \"Example role description\")"
+        },
+        {
+            "command": "role cancel [role]",
+            "description": "Cancels a vote for the given role, but only if you initiated it or are the admin. Put quotation marks around multi-word roles. (Ex: !role cancel \"Example Role\")"
+        },
+        {
+            "command": "role remove [role]",
+            "description": "[Admin Only] Removes the given role."
+        },
+        {
+            "command": "role rename [role] [new name]",
+            "description": "[Admin Only] Renames the given role."
+        },
+        {
+            "command": "role set_description [role] [new description]",
+            "description": "[Admin Only] Sets the description for the given role."
+        }
+    ],
+
+    "template": {
+        "command": "command",
+        "description": "description"
+    }
+}
