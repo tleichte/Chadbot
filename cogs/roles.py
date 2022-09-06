@@ -187,9 +187,13 @@ class RolesCog(Cog):
     @commands.hybrid_group()
     async def role(self, ctx: Context):
         if ctx.invoked_subcommand is None:
-            await respond(ctx, "You need a command attached for role to work!")
+            await respond(ctx, f"You need a command attached for {await self.bot.get_prefix()}role to work!")
 
-    @role.command()
+    @role.command(description="Renames an existing role (admin only)")
+    @app_commands.describe(
+        old_role="Name of old role",
+        new_role="Name of new role"
+    )
     async def rename(self, ctx: Context, old_role: str, new_role: str):
 
         if not await self.bot.is_owner(ctx.author):
@@ -222,7 +226,11 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Renamed role {old_role} to {new_role}!", delete_after=delete_time)
 
-    @role.command()
+    @role.command(description="Sets the description of an existing role (admin only)")
+    @app_commands.describe(
+        role_str="Name of role to adjust",
+        new_desc="New description for the role"
+    )
     async def set_description(self, ctx: Context, role_str: str, new_desc: str):
         if not await self.bot.is_owner(ctx.author):
             await respond(ctx, ":triumph: You're not the boss of me!")
@@ -238,7 +246,10 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Set description of role {role_str} to \"{new_desc}!\"", delete_after=delete_time)
 
-    @role.command()
+    @role.command(description="Removes a role (admin only)")
+    @app_commands.describe(
+        role_str="Name of role to remove"
+    )
     async def remove(self, ctx: Context, role_str: str):
         if not await self.bot.is_owner(ctx.author):
             await respond(ctx, "You're not the boss of me!")
@@ -270,7 +281,11 @@ class RolesCog(Cog):
             await ctx.message.delete()
             await respond(ctx, f"{ctx.author.mention} Removed role {role_str}!", delete_after=delete_time)
 
-    @role.command()
+    @role.command(description="Starts a vote to add a new role")
+    @app_commands.describe(
+        role_str="Name of role to add",
+        new_desc="Description of role to add"
+    )
     async def add(self, ctx: Context, role_str: str, role_desc: str):
         print(f"Add command from {ctx.author.display_name}")
         if role_str in self.saved_roles:
@@ -306,7 +321,10 @@ class RolesCog(Cog):
         await respond(ctx, f"You started a vote for **{role_str}** in {role_channel.mention}!")
 
     # noinspection PyBroadException
-    @role.command()
+    @role.command(description="Cancels a vote (if you started vote or are an admin)")
+    @app_commands.describe(
+        role_str="Name of role to cancel vote"
+    )
     async def cancel(self, ctx: Context, role_str: str):
         print(f"Cancel command from {ctx.author.display_name}")
         if role_str not in self.saved_votes:
@@ -337,7 +355,7 @@ class RolesCog(Cog):
         await self.update_files_and_messages()
         await respond(ctx, f"Cancelled the vote for {role_str}.")
 
-    @role.command()
+    @role.command(description="Shows help dialog")
     async def help(self, ctx: Context):
         with open("help/roles.json", 'r') as help_json:
             help_obj = json.load(help_json)
@@ -542,4 +560,6 @@ async def respond(ctx: Context, out_str: str, delete_after=None):
 
 
 def setup(bot):
-    bot.add_cog(RolesCog(bot))
+    rolesCog = RolesCog(bot)
+    rolesCog.tree.sync()
+    bot.add_cog(rolesCog)
