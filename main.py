@@ -1,8 +1,11 @@
 import discord
 import traceback
+import asyncio
 from discord import Intents
+import discord.ext.commands
 from discord.ext.commands import Bot, Context, Command, CommandError
 import json
+import logging
 
 # OPEN INITIAL FILES
 try:
@@ -13,10 +16,25 @@ except Exception as e:
     print("Config not found!")
     exit(-1)
 
+
+class MyBot(Bot):
+    async def setup_hook(self):
+        cogs = [
+            "delete",
+            "roles"
+        ]
+
+        for cog in cogs:
+            cog_to_load = f"cogs.{cog}"
+            print(f"Loading cog {cog_to_load}")
+            await self.load_extension(cog_to_load)
+        
+        await self.tree.sync()
+
 intents = Intents.default()
 intents.members = True
 intents.message_content = True
-bot = Bot(command_prefix="!", intents=intents)
+bot = MyBot(command_prefix=discord.ext.commands.when_mentioned_or("!"), intents=intents)
 bot.remove_command('help')
 
 async def respond(ctx: Context, message: str):
@@ -25,7 +43,7 @@ async def respond(ctx: Context, message: str):
 async def respond_generic_error(ctx:Context):
     await respond(ctx, f":grey_question: Sorry, I didn't recognize that. Check *help* to see what I do know.", False)
 
-@bot.hybrid_command()
+@bot.hybrid_command(description="(Admin) Shuts down the bot")
 async def bedtime(ctx: Context):
     if await bot.is_owner(ctx.author):
         print("Owner verified, shutting down")
@@ -37,8 +55,8 @@ async def bedtime(ctx: Context):
         await ctx.send(":triumph: You're not the boss of me.")
 
 
-@bot.hybrid_command()
-async def ping(ctx):
+@bot.hybrid_command(description="Shows the bot's ping")
+async def ping(ctx: Context):
     await ctx.send(f":ping_pong: Pong! ({round(bot.latency*1000)}ms)")
 
 
@@ -59,18 +77,13 @@ async def on_command_error(ctx:Context, error:CommandError):
         await respond(ctx, f"Sorry, something went wrong... I feel like I have butterflies... no, bugs, in my stomach. :sick:", False)
 
 
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user.name} - {bot.user.id}")
-
-
-@bot.command()
+@bot.hybrid_command(description="(Admin) Refreshes a cog.")
 async def refresh_cog(ctx: Context, cog_str: str):
     if await bot.is_owner(ctx.author):
         try:
             print(f"Owner verified, refreshing cog {cog_str}")
-            bot.reload_extension(f"cogs.{cog_str}")
+            await bot.reload_extension(f"cogs.{cog_str}")
+            await bot.tree.sync()
             await ctx.send(f"Refreshed cog {cog_str}!")
         except Exception as refresh_e:
             print(f"Failed to refresh cog {cog_str}!")
@@ -79,12 +92,9 @@ async def refresh_cog(ctx: Context, cog_str: str):
         await ctx.send(f"{ctx.author.mention} :triumph: You're not the boss of me!")
         print("Someone not the bot owner tried to refresh!")
 
-cogs = [
-    "delete",
-    "roles"
-]
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name} - {bot.user.id}")
 
-for cog in cogs:
-    bot.load_extension(f"cogs.{cog}")
-
-bot.run(config["token"])
+if __name__ == "__main__":
+    bot.run(config["token"])

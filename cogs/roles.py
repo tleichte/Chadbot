@@ -31,7 +31,6 @@ class RolesCog(Cog):
         self.saved_roles = {}
         self.saved_messages = {}
         self.saved_votes = {}
-        self.tree = app_commands.CommandTree(bot)
 
         try:
             with open("data/roles/roles.json", 'r') as infile:
@@ -46,6 +45,7 @@ class RolesCog(Cog):
             exit(-1)
 
         if self.bot.is_ready():
+            print("ON READY IN ROLES COG INIT")
             self.bot.loop.create_task(self.async_init())
 
     async def async_init(self):
@@ -180,6 +180,7 @@ class RolesCog(Cog):
 
     @Cog.listener()
     async def on_ready(self):
+        print("ON READY IN ROLES COG LISTENER")
         await self.async_init()
 
     # ROLE COMMANDS
@@ -189,7 +190,7 @@ class RolesCog(Cog):
         if ctx.invoked_subcommand is None:
             await respond(ctx, f"You need a command attached for {await self.bot.get_prefix()}role to work!")
 
-    @role.command(description="Renames an existing role (admin only)")
+    @role.command(description="(Admin) Renames an existing role")
     @app_commands.describe(
         old_role="Name of old role",
         new_role="Name of new role"
@@ -226,7 +227,7 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Renamed role {old_role} to {new_role}!", delete_after=delete_time)
 
-    @role.command(description="Sets the description of an existing role (admin only)")
+    @role.command(description="(Admin) Sets the description of an existing role")
     @app_commands.describe(
         role_str="Name of role to adjust",
         new_desc="New description for the role"
@@ -246,7 +247,7 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Set description of role {role_str} to \"{new_desc}!\"", delete_after=delete_time)
 
-    @role.command(description="Removes a role (admin only)")
+    @role.command(description="(Admin) Removes a role")
     @app_commands.describe(
         role_str="Name of role to remove"
     )
@@ -284,7 +285,7 @@ class RolesCog(Cog):
     @role.command(description="Starts a vote to add a new role")
     @app_commands.describe(
         role_str="Name of role to add",
-        new_desc="Description of role to add"
+        role_desc="Description of role to add"
     )
     async def add(self, ctx: Context, role_str: str, role_desc: str):
         print(f"Add command from {ctx.author.display_name}")
@@ -321,7 +322,7 @@ class RolesCog(Cog):
         await respond(ctx, f"You started a vote for **{role_str}** in {role_channel.mention}!")
 
     # noinspection PyBroadException
-    @role.command(description="Cancels a vote (if you started vote or are an admin)")
+    @role.command(description="Cancels a vote (if you started vote or are admin)")
     @app_commands.describe(
         role_str="Name of role to cancel vote"
     )
@@ -559,7 +560,5 @@ async def respond(ctx: Context, out_str: str, delete_after=None):
     await ctx.send(f"{ctx.author.mention} {out_str}", delete_after=delete_after)
 
 
-def setup(bot):
-    rolesCog = RolesCog(bot)
-    rolesCog.tree.sync()
-    bot.add_cog(rolesCog)
+async def setup(bot : Bot):
+    await bot.add_cog(RolesCog(bot))
