@@ -1,8 +1,8 @@
 import discord
 import traceback
 import asyncio
-from discord import Intents
-import discord.ext.commands
+from discord import Intents, app_commands
+from discord.ext import commands
 from discord.ext.commands import Bot, Context, Command, CommandError
 import json
 import logging
@@ -24,6 +24,11 @@ class MyBot(Bot):
             "roles"
         ]
 
+        async for guild in self.fetch_guilds():
+            app_commands = await self.tree.fetch_commands(guild=guild)
+            for app_command in app_commands:
+                await app_command.delete()
+
         for cog in cogs:
             cog_to_load = f"cogs.{cog}"
             print(f"Loading cog {cog_to_load}")
@@ -34,7 +39,7 @@ class MyBot(Bot):
 intents = Intents.default()
 intents.members = True
 intents.message_content = True
-bot = MyBot(command_prefix=discord.ext.commands.when_mentioned_or("!"), intents=intents)
+bot = MyBot(command_prefix="!", intents=intents)
 bot.remove_command('help')
 
 async def respond(ctx: Context, message: str):
@@ -70,7 +75,7 @@ async def on_command_error(ctx:Context, error:CommandError):
         return
 
     print(f"Command error! Message: \"{ctx.message.content}\", Error type: {type(error)}")
-    if isinstance(error, (discord.ext.commands.BadArgument, discord.ext.commands.CommandNotFound, discord.ext.commands.MissingRequiredArgument)):
+    if isinstance(error, (commands.BadArgument, commands.CommandNotFound, commands.MissingRequiredArgument)):
         await respond_generic_error(ctx)
     else:
         traceback.print_exception(type(error),error,error.__traceback__)
@@ -78,6 +83,8 @@ async def on_command_error(ctx:Context, error:CommandError):
 
 
 @bot.hybrid_command(description="(Admin) Refreshes a cog.")
+@app_commands.rename(cog_str="cog_name")
+@app_commands.describe(cog_str="Name of cog to refresh")
 async def refresh_cog(ctx: Context, cog_str: str):
     if await bot.is_owner(ctx.author):
         try:

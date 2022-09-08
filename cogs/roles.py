@@ -191,6 +191,10 @@ class RolesCog(Cog):
             await respond(ctx, f"You need a command attached for {await self.bot.get_prefix()}role to work!")
 
     @role.command(description="(Admin) Renames an existing role")
+    @app_commands.rename(
+        old_role = "old_name",
+        new_role = "new_name"
+    )
     @app_commands.describe(
         old_role="Name of old role",
         new_role="Name of new role"
@@ -227,7 +231,12 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Renamed role {old_role} to {new_role}!", delete_after=delete_time)
 
+
     @role.command(description="(Admin) Sets the description of an existing role")
+    @app_commands.rename(
+        role_str = "role",
+        new_desc = "new_description"
+    )
     @app_commands.describe(
         role_str="Name of role to adjust",
         new_desc="New description for the role"
@@ -247,7 +256,11 @@ class RolesCog(Cog):
         await ctx.message.delete()
         await respond(ctx, f"Set description of role {role_str} to \"{new_desc}!\"", delete_after=delete_time)
 
+
     @role.command(description="(Admin) Removes a role")
+    @app_commands.rename(
+        role_str = "role"
+    )
     @app_commands.describe(
         role_str="Name of role to remove"
     )
@@ -282,7 +295,12 @@ class RolesCog(Cog):
             await ctx.message.delete()
             await respond(ctx, f"{ctx.author.mention} Removed role {role_str}!", delete_after=delete_time)
 
+
     @role.command(description="Starts a vote to add a new role")
+    @app_commands.rename(
+        role_str = "role",
+        role_desc = "description"
+    )
     @app_commands.describe(
         role_str="Name of role to add",
         role_desc="Description of role to add"
@@ -323,6 +341,9 @@ class RolesCog(Cog):
 
     # noinspection PyBroadException
     @role.command(description="Cancels a vote (if you started vote or are admin)")
+    @app_commands.rename(
+        role_str = "role"
+    )
     @app_commands.describe(
         role_str="Name of role to cancel vote"
     )
