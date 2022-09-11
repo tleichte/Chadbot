@@ -386,7 +386,7 @@ class RolesCog(Cog):
         help_embed.title = help_obj["title"]
         help_embed.description = help_obj["description"]
 
-        def add_entry_commands(entry_group:List[Union[app_commands.Command[Any, ..., Any], app_commands.Group]]):
+        def add_entry_commands(entry_group):
             for entry in entry_group:
                 if type(entry) is app_commands.commands.Group:
                     add_entry_commands(entry.commands)
