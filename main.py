@@ -1,11 +1,9 @@
-import discord
+import bdb
 import traceback
-import asyncio
-from discord import Intents, app_commands
+from discord import Intents, app_commands, Interaction
 from discord.ext import commands
-from discord.ext.commands import Bot, Context, Command, CommandError
+from discord.ext.commands import Bot, Command, CommandError
 import json
-import logging
 
 # OPEN INITIAL FILES
 try:
@@ -42,61 +40,57 @@ intents.message_content = True
 bot = MyBot(command_prefix="!", intents=intents)
 bot.remove_command('help')
 
-async def respond(ctx: Context, message: str):
-    await ctx.send(f"{ctx.author.mention}\n{message}")
+async def respond(interaction: Interaction, message: str, ephemeral:bool=False):
+    if interaction.response.is_done():
+        await interaction.edit_original_response(content=message)
+    else:
+        await interaction.response.send_message(message, ephemeral=ephemeral)
 
-async def respond_generic_error(ctx:Context):
-    await respond(ctx, f":grey_question: Sorry, I didn't recognize that. Check *help* to see what I do know.", False)
-
-@bot.hybrid_command(description="(Admin) Shuts down the bot")
-async def bedtime(ctx: Context):
-    if await bot.is_owner(ctx.author):
+@bot.tree.command(description="(Admin) Shuts down the bot")
+async def bedtime(interaction: Interaction):
+    if await bot.is_owner(interaction.user):
         print("Owner verified, shutting down")
-        await ctx.send(":yawning_face: :sleeping:")
+        await respond(interaction, ":yawning_face: :sleeping:", ephemeral=True)
         await bot.close()
         print("Shutdown complete")
     else:
         print("User doesn't have kill permission.")
-        await ctx.send(":triumph: You're not the boss of me.")
+        await respond(interaction, ":triumph: You're not the boss of me.", ephemeral=True)
 
 
-@bot.hybrid_command(description="Shows the bot's ping")
-async def ping(ctx: Context):
-    await ctx.send(f":ping_pong: Pong! ({round(bot.latency*1000)}ms)")
+@bot.tree.command(description="Shows the bot's ping")
+async def ping(interaction: Interaction):
+    await respond(interaction, f":ping_pong: Pong! ({round(bot.latency*1000)}ms)")
 
 
-@bot.event
-async def on_command_error(ctx:Context, error:CommandError):
-
-    cmd: Command = ctx.command
-
-    if cmd is None:
-        print("Unrecognized command detected; ignoring")
-        return
-
-    print(f"Command error! Message: \"{ctx.message.content}\", Error type: {type(error)}")
-    if isinstance(error, (commands.BadArgument, commands.CommandNotFound, commands.MissingRequiredArgument)):
-        await respond_generic_error(ctx)
-    else:
-        traceback.print_exception(type(error),error,error.__traceback__)
-        await respond(ctx, f"Sorry, something went wrong... I feel like I have butterflies... no, bugs, in my stomach. :sick:", False)
-
-
-@bot.hybrid_command(description="(Admin) Refreshes a cog.")
+@bot.tree.command(description="(Admin) Refreshes a cog.")
 @app_commands.rename(cog_str="cog_name")
 @app_commands.describe(cog_str="Name of cog to refresh")
-async def refresh_cog(ctx: Context, cog_str: str):
-    if await bot.is_owner(ctx.author):
+async def refresh_cog(interaction: Interaction, cog_str: str):
+    if await bot.is_owner(interaction.user):
+        await interaction.response.defer(ephemeral=True)
         try:
             print(f"Owner verified, refreshing cog {cog_str}")
             await bot.reload_extension(f"cogs.{cog_str}")
+            print(f"Cog {cog_str} refreshed, syncing app command tree")
             await bot.tree.sync()
-            await ctx.send(f"Refreshed cog {cog_str}!")
-        except Exception as refresh_e:
+            print(f"App command tree synced")
+            await respond(interaction, f"Successfully refreshed cog **{cog_str}**!", ephemeral=True)
+
+        except (commands.ExtensionNotLoaded, commands.ExtensionNotFound) as command_exception:
+            print(f"Given cog {cog_str} doesn't exist.")
+            out_message = f"Cog **{cog_str}** doesn't exist! Available cogs:\n"
+            for full_extension_name in bot.extensions.keys():
+                out_message += f"- {full_extension_name.removeprefix('cogs.')}\n"
+            await respond(interaction, out_message, ephemeral=True)
+
+        except Exception:
             print(f"Failed to refresh cog {cog_str}!")
-            print(refresh_e)
+            traceback.print_exc()
+            await respond(interaction, f"Error refreshing cog **{cog_str}**! Check the output for exception details.", ephemeral=True)
+
     else:
-        await ctx.send(f"{ctx.author.mention} :triumph: You're not the boss of me!")
+        await respond(interaction, ":triumph: You're not the boss of me!", ephemeral=True)
         print("Someone not the bot owner tried to refresh!")
 
 @bot.event

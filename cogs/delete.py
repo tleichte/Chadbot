@@ -44,5 +44,6 @@ class DeleteCog(Cog):
         await msg.delete()
 
 
-async def setup(bot : Bot):    
+async def setup(bot : Bot):
     await bot.add_cog(DeleteCog(bot, config["emoji_id"]))
+

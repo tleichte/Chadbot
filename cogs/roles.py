@@ -1,10 +1,9 @@
 import traceback
+from typing import Any, List, Optional, Union
 
 import discord
-from discord.ext.commands import Cog, Context, Bot
-from discord import *
-from discord import app_commands
-from discord.ext import commands
+from discord.ext.commands import Cog, Bot
+from discord import app_commands, Interaction, Role, TextChannel, Guild, Message, Member
 import json
 
 try:
@@ -16,7 +15,7 @@ except Exception as e:
     exit(-1)
 
 
-delete_time = 7
+delete_time = 15
 
 
 def get_emoji_name(emoji_obj):
@@ -62,7 +61,7 @@ class RolesCog(Cog):
         # Create roles on the server if they don't exist, add to saved messages
         for saved_role in self.saved_roles:
             print(f"Checking role {saved_role}")
-            if not utils.get(role_guild.roles, name=saved_role):
+            if not discord.utils.get(role_guild.roles, name=saved_role):
                 print(f"--Creating role {saved_role}")
                 await role_guild.create_role(name=saved_role, mentionable=True)
             if self.saved_roles[saved_role] is None:
@@ -102,7 +101,7 @@ class RolesCog(Cog):
                     role_name = self.saved_messages[message_id][emoji_name]
 
                     print("----Grabbing role reaction users...")
-                    reaction_users = await role_reaction.users().flatten()
+                    reaction_users = [ user async for user in role_reaction.users() ]
 
                     reaction_users_ids = []
                     for reaction_user in reaction_users:
@@ -185,12 +184,9 @@ class RolesCog(Cog):
 
     # ROLE COMMANDS
 
-    @commands.hybrid_group()
-    async def role(self, ctx: Context):
-        if ctx.invoked_subcommand is None:
-            await respond(ctx, f"You need a command attached for {await self.bot.get_prefix()}role to work!")
-
-    @role.command(description="(Admin) Renames an existing role")
+    role_group = app_commands.Group(name="role", description="Commands", guild_only=True)
+    
+    @role_group.command(description="(Admin) Renames an existing role")
     @app_commands.rename(
         old_role = "old_name",
         new_role = "new_name"
@@ -199,17 +195,17 @@ class RolesCog(Cog):
         old_role="Name of old role",
         new_role="Name of new role"
     )
-    async def rename(self, ctx: Context, old_role: str, new_role: str):
+    async def rename(self, interaction: Interaction, old_role: str, new_role: str):
 
-        if not await self.bot.is_owner(ctx.author):
-            await respond(ctx, ":triumph: You're not the boss of me!")
+        if not await self.bot.is_owner(interaction.user):
+            await respond(interaction, ":triumph: You're not the boss of me!", ephemeral=True)
             return
 
         if old_role not in self.saved_roles:
-            await respond(ctx, "That role doesn't exist!")
+            await respond(interaction, f"No role with the name **{old_role}** exists!", ephemeral=True)
             return
 
-        role_obj: Role = discord.utils.get(ctx.guild.roles, name=old_role)
+        role_obj: Role = discord.utils.get(interaction.guild.roles, name=old_role)
         await role_obj.edit(name=new_role)
 
         prev_value = self.saved_roles[old_role]
@@ -228,11 +224,10 @@ class RolesCog(Cog):
                 break
 
         await self.update_files_and_messages()
-        await ctx.message.delete()
-        await respond(ctx, f"Renamed role {old_role} to {new_role}!", delete_after=delete_time)
+        await respond(interaction, f"Renamed role **{old_role}** to **{new_role}**!", delete_after=delete_time)
 
 
-    @role.command(description="(Admin) Sets the description of an existing role")
+    @role_group.command(description="(Admin) Sets the description of an existing role")
     @app_commands.rename(
         role_str = "role",
         new_desc = "new_description"
@@ -241,39 +236,38 @@ class RolesCog(Cog):
         role_str="Name of role to adjust",
         new_desc="New description for the role"
     )
-    async def set_description(self, ctx: Context, role_str: str, new_desc: str):
-        if not await self.bot.is_owner(ctx.author):
-            await respond(ctx, ":triumph: You're not the boss of me!")
+    async def set_description(self, interaction: Interaction, role_str: str, new_desc: str):
+        if not await self.bot.is_owner(interaction.user):
+            await respond(interaction, ":triumph: You're not the boss of me!", ephemeral=True)
             return
 
         if role_str not in self.saved_roles:
-            await respond(ctx, "That role doesn't exist!")
+            await respond(interaction, f"No role with the name **{role_str}** exists!", ephemeral=True)
             return
 
         self.saved_roles[role_str]["desc"] = new_desc
 
         await self.update_files_and_messages()
-        await ctx.message.delete()
-        await respond(ctx, f"Set description of role {role_str} to \"{new_desc}!\"", delete_after=delete_time)
+        await respond(interaction, f"Set description of role **{role_str}** to \"{new_desc}!\"", delete_after=delete_time)
 
 
-    @role.command(description="(Admin) Removes a role")
+    @role_group.command(description="(Admin) Removes a role")
     @app_commands.rename(
         role_str = "role"
     )
     @app_commands.describe(
         role_str="Name of role to remove"
     )
-    async def remove(self, ctx: Context, role_str: str):
-        if not await self.bot.is_owner(ctx.author):
-            await respond(ctx, "You're not the boss of me!")
+    async def remove(self, interaction: Interaction, role_str: str):
+        if not await self.bot.is_owner(interaction.user):
+            await respond(interaction, "You're not the boss of me!", ephemeral=True)
             return
 
         if role_str not in self.saved_roles:
-            await respond(ctx, "That role doesn't exist!")
+            await respond(interaction, f"No role with the name **{role_str}** exists!", ephemeral=True)
             return
 
-        role_obj: Role = discord.utils.get(ctx.guild.roles, name=role_str)
+        role_obj: Role = discord.utils.get(interaction.guild.roles, name=role_str)
         await role_obj.delete()
 
         # Remove from saved roles
@@ -292,11 +286,10 @@ class RolesCog(Cog):
 
         if found_message:
             await self.update_files_and_messages()
-            await ctx.message.delete()
-            await respond(ctx, f"{ctx.author.mention} Removed role {role_str}!", delete_after=delete_time)
+            await respond(interaction, f"Removed role **{role_str}**!", delete_after=delete_time)
 
 
-    @role.command(description="Starts a vote to add a new role")
+    @role_group.command(description="Starts a vote to add a new role")
     @app_commands.rename(
         role_str = "role",
         role_desc = "description"
@@ -305,18 +298,18 @@ class RolesCog(Cog):
         role_str="Name of role to add",
         role_desc="Description of role to add"
     )
-    async def add(self, ctx: Context, role_str: str, role_desc: str):
-        print(f"Add command from {ctx.author.display_name}")
+    async def add(self, interaction: Interaction, role_str: str, role_desc: str):
+        print(f"Add command from {interaction.user.display_name}")
         if role_str in self.saved_roles:
-            await respond(ctx, "That role already exists!")
+            await respond(interaction, f"A role with the name **{role_str}** already exists!", ephemeral=True)
             return
 
         if role_str in self.saved_votes:
-            await respond(ctx, "That role is currently being voted on!")
+            await respond(interaction, f"A role with the name **{role_str}** is already being voted on!", ephemeral=True)
             return
 
-        if utils.get(ctx.guild.roles, name=role_str):
-            await respond(ctx, "That role is already reserved for this server!")
+        if discord.utils.get(interaction.guild.roles, name=role_str):
+            await respond(interaction, f"The name **{role_str}** is already reserved for this server!", ephemeral=True)
             return
 
         try:
@@ -327,30 +320,30 @@ class RolesCog(Cog):
             return
 
         vote_str = f":ballot_box: Voting on new role **{role_str}** ({role_desc}).\n" \
-                   f"This vote was initiated by {ctx.author.mention}.\n" \
+                   f"This vote was initiated by {interaction.user.mention}.\n" \
                    f"React with {config['VoteEmoji']} if you want this role added!\n" \
                    f"It will be added if {config['VoteCount']} people want it. _Not including my reaction of course :)_"
         vote_message: Message = await role_channel.send(vote_str)
         await vote_message.add_reaction(config["VoteEmoji"])
 
-        saved_obj = {"user": ctx.author.id, "message_id": vote_message.id, "desc": role_desc}
+        saved_obj = {"user": interaction.user.id, "message_id": vote_message.id, "desc": role_desc}
 
         self.saved_votes[role_str] = saved_obj
         await self.update_files_and_messages()
-        await respond(ctx, f"You started a vote for **{role_str}** in {role_channel.mention}!")
+        await respond(interaction, f"You started a vote for **{role_str}** in {role_channel.mention}!")
 
     # noinspection PyBroadException
-    @role.command(description="Cancels a vote (if you started vote or are admin)")
+    @role_group.command(description="Cancels a vote (if you started vote or are admin)")
     @app_commands.rename(
         role_str = "role"
     )
     @app_commands.describe(
         role_str="Name of role to cancel vote"
     )
-    async def cancel(self, ctx: Context, role_str: str):
-        print(f"Cancel command from {ctx.author.display_name}")
+    async def cancel(self, interaction: Interaction, role_str: str):
+        print(f"Cancel command from {interaction.user.display_name}")
         if role_str not in self.saved_votes:
-            await respond(ctx, f"No vote exists for the role **{role_str}**!")
+            await respond(interaction, f"No vote exists for the role **{role_str}**!", ephemeral=True)
             return
 
         try:
@@ -360,8 +353,8 @@ class RolesCog(Cog):
             traceback.print_exc()
             return
 
-        if ctx.author.id != self.saved_votes[role_str]["user"] and not await self.bot.is_owner(ctx.author):
-            await respond(ctx, ":triumph: You didn't start that vote and you're not the boss of me, so you can't cancel it.")
+        if interaction.user.id != self.saved_votes[role_str]["user"] and not await self.bot.is_owner(interaction.user):
+            await respond(interaction, ":triumph: You didn't start that vote and you're not the boss of me, so you can't cancel it.", ephemeral=True)
             return
 
         try:
@@ -375,10 +368,10 @@ class RolesCog(Cog):
         self.saved_votes.pop(role_str)
 
         await self.update_files_and_messages()
-        await respond(ctx, f"Cancelled the vote for {role_str}.")
+        await respond(interaction, f"Cancelled the vote for **{role_str}**.")
 
-    @role.command(description="Shows help dialog")
-    async def help(self, ctx: Context):
+    @role_group.command(description="Shows help dialog")
+    async def help(self, interaction: Interaction):
         with open("help/roles.json", 'r') as help_json:
             help_obj = json.load(help_json)
 
@@ -393,18 +386,24 @@ class RolesCog(Cog):
         help_embed.title = help_obj["title"]
         help_embed.description = help_obj["description"]
 
-        prefix = ctx.prefix
+        def add_entry_commands(entry_group:List[Union[app_commands.Command[Any, ..., Any], app_commands.Group]]):
+            for entry in entry_group:
+                if type(entry) is app_commands.commands.Group:
+                    add_entry_commands(entry.commands)
+                else:
+                    help_embed.add_field(name="/" + entry.walk_commands.name, value=entry.description, inline=False)
 
-        entries = help_obj['entries']
-        for entry in entries:
-            help_embed.add_field(name=prefix + entry['command'], value=entry['description'], inline=False)
+        
+        for command in self.walk_app_commands():
+            if not isinstance(command, app_commands.Group):
+                help_embed.add_field(name="/" + command.qualified_name, value=command.description, inline=False)
 
-        await ctx.send(embed=help_embed)
+        await interaction.response.send_message(embed=help_embed)
 
     # LISTENERS
 
     @Cog.listener()
-    async def on_raw_reaction_add(self, payload: RawReactionActionEvent):
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         print("Raw reaction added!")
 
         print(f"Channel id: {payload.channel_id}, Config: {config['ChannelID']}")
@@ -440,7 +439,7 @@ class RolesCog(Cog):
                                 await self.update_files_and_messages()
 
                                 out_msg: Message = await role_channel.fetch_message(self.saved_roles[vote_role]["message_id"])
-                                await out_msg.reply(f"Added the new role *{ vote_role }* here!", delete_after=delete_time)
+                                await out_msg.reply(f"Added the new role **{vote_role}** here!", delete_after=delete_time)
                             break
                 else:
                     print("--Wrong reaction...")
@@ -459,7 +458,7 @@ class RolesCog(Cog):
         await msg.clear_reaction(payload.emoji)
 
     @Cog.listener()
-    async def on_raw_reaction_remove(self, payload: RawReactionActionEvent):
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         print("Reaction removed!")
 
         if payload.channel_id != config["ChannelID"]:
@@ -577,8 +576,11 @@ class RolesCog(Cog):
             json.dump(self.saved_votes, outfile)
 
 
-async def respond(ctx: Context, out_str: str, delete_after=None):
-    await ctx.send(f"{ctx.author.mention} {out_str}", delete_after=delete_after)
+async def respond(interaction: Interaction, out_str: str, ephemeral:bool = False, delete_after:Optional[float]=None):
+    await interaction.response.send_message(out_str, ephemeral=ephemeral)
+    if (delete_after is not None):
+        original_response = await interaction.original_response()
+        await original_response.delete(delay=delete_after)
 
 
 async def setup(bot : Bot):
