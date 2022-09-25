@@ -584,7 +584,10 @@ class RolesCog(Cog):
 
 
 async def respond(interaction: Interaction, out_str: str, ephemeral:bool = False, delete_after:Optional[float]=None):
-    await interaction.response.send_message(out_str, ephemeral=ephemeral)
+    if interaction.response.is_done():
+        await interaction.edit_original_response(content=out_str)
+    else:
+        await interaction.response.send_message(out_str, ephemeral=ephemeral)
     if (delete_after is not None):
         original_response = await interaction.original_response()
         await original_response.delete(delay=delete_after)
