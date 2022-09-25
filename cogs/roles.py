@@ -223,8 +223,12 @@ class RolesCog(Cog):
             if found_message:
                 break
 
-        await self.update_files_and_messages()
-        await respond(interaction, f"Renamed role **{old_role}** to **{new_role}**!", delete_after=delete_time)
+        if found_message:
+            await interaction.response.defer()
+            await self.update_files_and_messages()
+            await respond(interaction, f"Renamed role **{old_role}** to **{new_role}**!", delete_after=delete_time)
+        else:
+            await error_respond(interaction)
 
 
     @role_group.command(description="(Admin) Sets the description of an existing role")
@@ -246,7 +250,7 @@ class RolesCog(Cog):
             return
 
         self.saved_roles[role_str]["desc"] = new_desc
-
+        await interaction.response.defer()
         await self.update_files_and_messages()
         await respond(interaction, f"Set description of role **{role_str}** to \"{new_desc}!\"", delete_after=delete_time)
 
@@ -285,8 +289,11 @@ class RolesCog(Cog):
                 break
 
         if found_message:
+            await interaction.response.defer()
             await self.update_files_and_messages()
             await respond(interaction, f"Removed role **{role_str}**!", delete_after=delete_time)
+        else:
+            await error_respond(interaction)
 
 
     @role_group.command(description="Starts a vote to add a new role")
@@ -312,12 +319,16 @@ class RolesCog(Cog):
             await respond(interaction, f"The name **{role_str}** is already reserved for this server!", ephemeral=True)
             return
 
+
         try:
             role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
         except Exception as role_exception:
+            await error_respond(interaction)
             print("Error grabbing role channel!")
             print(role_exception)
             return
+        
+        await interaction.response.defer()
 
         vote_str = f":ballot_box: Voting on new role **{role_str}** ({role_desc}).\n" \
                    f"This vote was initiated by {interaction.user.mention}.\n" \
@@ -342,6 +353,7 @@ class RolesCog(Cog):
     )
     async def cancel(self, interaction: Interaction, role_str: str):
         print(f"Cancel command from {interaction.user.display_name}")
+        
         if role_str not in self.saved_votes:
             await respond(interaction, f"No vote exists for the role **{role_str}**!", ephemeral=True)
             return
@@ -361,9 +373,12 @@ class RolesCog(Cog):
             msg: Message = await role_channel.fetch_message(self.saved_votes[role_str]["message_id"])
             await msg.delete()
         except Exception:
+            await error_respond(interaction)
             print("Error grabbing message!")
             traceback.print_exc()
             return
+
+        await interaction.response.defer()
 
         self.saved_votes.pop(role_str)
 
@@ -386,14 +401,6 @@ class RolesCog(Cog):
         help_embed.title = help_obj["title"]
         help_embed.description = help_obj["description"]
 
-        def add_entry_commands(entry_group):
-            for entry in entry_group:
-                if type(entry) is app_commands.commands.Group:
-                    add_entry_commands(entry.commands)
-                else:
-                    help_embed.add_field(name="/" + entry.walk_commands.name, value=entry.description, inline=False)
-
-        
         for command in self.walk_app_commands():
             if not isinstance(command, app_commands.Group):
                 help_embed.add_field(name="/" + command.qualified_name, value=command.description, inline=False)
@@ -475,7 +482,7 @@ class RolesCog(Cog):
             role_member: Member = await role_channel.guild.fetch_member(payload.user_id)
         except Exception:
             print("Error when getting role member!")
-            print(traceback.print_exc())
+            traceback.print_exc()
             return
 
         print("--Finding roles")
@@ -582,6 +589,8 @@ async def respond(interaction: Interaction, out_str: str, ephemeral:bool = False
         original_response = await interaction.original_response()
         await original_response.delete(delay=delete_after)
 
+async def error_respond(interaction: Interaction):
+    await respond(interaction, "Oops, there was a problem I wasn't expecting, could you message the bot owner for me? :pleading_face:", ephemeral=True)
 
 async def setup(bot : Bot):
     await bot.add_cog(RolesCog(bot))
