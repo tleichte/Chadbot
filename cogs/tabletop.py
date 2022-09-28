@@ -32,8 +32,14 @@ class TabletopCog(Cog):
         self.bot = init_bot
         
 
-    @app_commands.command(description="Rolls a die of a given side amount")
+    @app_commands.command(description="Rolls a die")
     @app_commands.rename(with_type="with")
+    @app_commands.describe(
+        amount="Number of dice to roll",
+        die_type="Type of die",
+        modifier="Adjustment after rolling (accepts both positive/negative numbers)",
+        with_type="Whether to roll with advantage or disadvantage"
+    )
     async def roll(self, interaction: Interaction, amount: app_commands.Range[int, 1, 1000], die_type : DiceType, modifier : int = 0, with_type : WithType = None):
         max_value: int = die_type.value
         base_value: int = 0
@@ -83,6 +89,20 @@ class TabletopCog(Cog):
 
 
         await utils.respond(interaction, f"{prefix_str}{self.get_emoji_str(die_type)}`{dice_str}` ⟶ Rolled {dirty_str}**{total_value}** {plus_str} {outputs_str}")
+
+    @app_commands.command(description="Flips a coin")
+    async def flip(self, interaction: Interaction):
+        
+        await utils.respond(interaction, f"{config['coin_emojis']['flipping']}")
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        side: bool = random.randint(0, 200) == 0
+        emoji_str = ""
+        if side:
+            emoji_str = config["coin_emojis"]["side"]
+        else:
+            heads: bool = random.randint(0, 1) == 0
+            emoji_str = config["coin_emojis"]["heads" if heads else "tails"]
+        await utils.respond(interaction, f"{emoji_str}")
 
     def get_emoji_str(self, die_type: DiceType):
         return config["dice_emojis"][f"{die_type.value}"]["normal"]
