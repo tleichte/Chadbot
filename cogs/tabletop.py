@@ -92,7 +92,6 @@ class TabletopCog(Cog):
 
     @app_commands.command(description="Flips a coin")
     async def flip(self, interaction: Interaction):
-        
         await utils.respond(interaction, f"{config['coin_emojis']['flipping']}")
         await asyncio.sleep(random.uniform(0.5, 1.5))
         side: bool = random.randint(0, 200) == 0
