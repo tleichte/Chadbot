@@ -1,4 +1,3 @@
-import bdb
 import traceback
 from discord import Intents, app_commands, Interaction
 from discord.ext import commands
@@ -61,16 +60,18 @@ async def ping(interaction: Interaction):
 
 @bot.tree.command(description="(Admin) Refreshes a cog")
 @app_commands.rename(cog_str="cog_name")
-@app_commands.describe(cog_str="Name of cog to refresh")
-async def refresh_cog(interaction: Interaction, cog_str: str):
+@app_commands.describe(cog_str="Name of cog to refresh", refresh_tree="Whether or not to re-sync command tree")
+async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool):
     if await bot.is_owner(interaction.user):
         await interaction.response.defer(ephemeral=True)
         try:
             print(f"Owner verified, refreshing cog {cog_str}")
             await bot.reload_extension(f"cogs.{cog_str}")
-            print(f"Cog {cog_str} refreshed, syncing app command tree")
-            await bot.tree.sync()
-            print(f"App command tree synced")
+            print(f"Cog {cog_str} refreshed")
+            if refresh_tree:
+                print("Syncing app command tree...")
+                await bot.tree.sync()
+                print(f"App command tree synced")
             await utils.respond(interaction, f"Successfully refreshed cog **{cog_str}**!", ephemeral=True)
 
         except (commands.ExtensionNotLoaded, commands.ExtensionNotFound) as command_exception:
