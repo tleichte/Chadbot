@@ -89,7 +89,7 @@ class RolesCog(Cog):
 
             # noinspection PyBroadException
             try:
-                print("--Grabbing message...")
+                print(f"--Grabbing message with id {int(message_id)}...")
                 role_message: Message = await role_channel.fetch_message(int(message_id))
                 for role_reaction in role_message.reactions:
 
@@ -105,7 +105,11 @@ class RolesCog(Cog):
 
                     reaction_users_ids = []
                     for reaction_user in reaction_users:
-                        reaction_users_ids.append(reaction_user.id)
+                        if type(reaction_user) is Member:
+                            reaction_users_ids.append(reaction_user.id)
+                        else:
+                            print(f"Found non-member reaction (User {reaction_user.name})")
+                            await role_reaction.remove(reaction_user)
 
                     # Remove roles from users who've removed their reaction on a tracked message
                     if role_name in role_members:
@@ -116,6 +120,7 @@ class RolesCog(Cog):
                                     if role_member_id not in cached_members:
                                         print("----Grabbing non-cached role member...")
                                         cached_members[role_member_id] = await role_guild.fetch_member(role_member_id)
+                                            
                                     role_member: Member = cached_members[role_member_id]
                                     role_obj = discord.utils.get(role_guild.roles, name=role_name)
                                     await role_member.remove_roles(role_obj)
