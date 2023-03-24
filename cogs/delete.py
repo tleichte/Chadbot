@@ -2,7 +2,6 @@ from discord import *
 from discord.ext.commands import *
 from datetime import *
 import json
-import pytz
 
 try:
     with open("configs/delete.json", 'r') as config_json:
