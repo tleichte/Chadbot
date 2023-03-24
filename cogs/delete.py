@@ -38,7 +38,7 @@ class DeleteCog(Cog):
         if added_reaction.count < config["count"]:
             return
 
-        if msg.created_at.replace(tzinfo=pytz.UTC) < datetime.utcnow() - timedelta(days = 3):
+        if msg.created_at < datetime.utcnow(msg.created_at.tzinfo) - timedelta(days = 3):
             return
 
         print("Reached count! Deleting message.")
