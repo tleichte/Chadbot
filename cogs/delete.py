@@ -2,6 +2,7 @@ from discord import *
 from discord.ext.commands import *
 from datetime import *
 import json
+import pytz
 
 try:
     with open("configs/delete.json", 'r') as config_json:
@@ -37,7 +38,7 @@ class DeleteCog(Cog):
         if added_reaction.count < config["count"]:
             return
 
-        if msg.created_at < datetime.utcnow() - timedelta(days = 3):
+        if msg.created_at.replace(tzinfo=pytz.UTC) < datetime.utcnow() - timedelta(days = 3):
             return
 
         print("Reached count! Deleting message.")
