@@ -34,7 +34,7 @@ class Poll:
     def get_message_content(self) -> str:
         if (self.is_done()):
             return f"{self._user.mention}'s poll has ended. Here are your results! (Total votes: {len(self._user_votes)})"
-        return f"{self._user.mention} started a poll! Poll ends at <t:{self._end_timestamp}:t>"
+        return f"{self._user.mention} started a poll! Poll ends at <t:{self._end_timestamp}:R>"
 
     def get_embed(self) -> discord.Embed:
         embed = discord.Embed(title=self._header)
