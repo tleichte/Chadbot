@@ -1,3 +1,4 @@
+import importlib
 import traceback
 from discord import Intents, app_commands, Interaction
 from discord.ext import commands
@@ -14,14 +15,18 @@ except Exception as e:
     print("Config not found!")
     exit(-1)
 
+try:
+    with open("configs/token.json", 'r') as token_json:
+        token_config = json.load(token_json)
+except Exception as e:
+    print(e)
+    print("Token config not found!")
+    exit(-1)
+
 
 class MyBot(Bot):
     async def setup_hook(self):
-        cogs = [
-            "delete",
-            "roles",
-            "tabletop"
-        ]
+        cogs = config["cogs"]
 
         async for guild in self.fetch_guilds():
             app_commands = await self.tree.fetch_commands(guild=guild)
@@ -57,24 +62,34 @@ async def bedtime(interaction: Interaction):
 async def ping(interaction: Interaction):
     await utils.respond(interaction, f":ping_pong: Pong! ({round(bot.latency*1000)}ms)")
 
-
-@bot.tree.command(description="(Admin) Refreshes a cog")
+@bot.tree.command(description="(Admin) Refreshes a cog if loaded. If a cog exists but is unloaded, it is loaded.")
 @app_commands.rename(cog_str="cog_name")
-@app_commands.describe(cog_str="Name of cog to refresh", refresh_tree="Whether or not to re-sync command tree")
+@app_commands.describe(cog_str="Name of cog to refresh", refresh_tree="Whether or not to re-sync command tree when a loaded cog is refreshed (new cogs automatically refresh tree)")
 async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool):
     if await bot.is_owner(interaction.user):
         await interaction.response.defer(ephemeral=True)
+        print(f"Owner verified, refreshing cog {cog_str}")
+
+        full_cog_str = f"cogs.{cog_str}"
+
+        importlib.reload(utils) # When refreshing cog, make sure latest utils functions are usable
+
         try:
-            print(f"Owner verified, refreshing cog {cog_str}")
-            await bot.reload_extension(f"cogs.{cog_str}")
-            print(f"Cog {cog_str} refreshed")
-            if refresh_tree:
+            new_cog = full_cog_str not in bot.extensions.keys()
+            if new_cog:
+                await bot.load_extension(full_cog_str)
+            else:
+                await bot.reload_extension(full_cog_str)
+            if refresh_tree or new_cog:
                 print("Syncing app command tree...")
                 await bot.tree.sync()
                 print(f"App command tree synced")
+
+            print(f"Cog {cog_str} refreshed")
+            
             await utils.respond(interaction, f"Successfully refreshed cog **{cog_str}**!", ephemeral=True)
 
-        except (commands.ExtensionNotLoaded, commands.ExtensionNotFound) as command_exception:
+        except commands.ExtensionNotFound:
             print(f"Given cog {cog_str} doesn't exist.")
             out_message = f"Cog **{cog_str}** doesn't exist! Available cogs:\n"
             for full_extension_name in bot.extensions.keys():
@@ -95,4 +110,4 @@ async def on_ready():
     print(f"Logged in as {bot.user.name} - {bot.user.id}")
 
 if __name__ == "__main__":
-    bot.run(config["token"])
+    bot.run(token_config["token"])
