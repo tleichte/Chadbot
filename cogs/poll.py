@@ -16,19 +16,14 @@ def format_emoji(index:int, str:str):
     return f"{poll_emojis[index]} {str}"
 
 class Poll:
-    _user : discord.User = None
-    _message : discord.Message = None
-    _header : str = None
-    _options : List[str]
-    _end_timestamp : int = 0
-    _user_votes : Dict[int, int] = {} # KVP: { user_id : int, option_index : int }
-
+    
     def __init__(self, user:discord.User, message : discord.Message, header:str, options:List[str], end_timestamp : int):
-        self._user = user
-        self._message = message
-        self._header = header
-        self._options = [option for option in options if len(option.split()) > 0]
-        self._end_timestamp = end_timestamp
+        self._user : discord.User = user
+        self._message : discord.Message = message
+        self._header : str = header
+        self._options : List[str] = [option for option in options if len(option.split()) > 0]
+        self._end_timestamp : int = end_timestamp
+        self._user_votes : Dict[int,int] = {} # KVP: { user_id : int, option_index : int }
     
     def user_vote(self, user_id:int, option_index: int):
         self._user_votes[user_id] = option_index
@@ -58,7 +53,7 @@ class Poll:
 
 
         for i in range(len(self._options)):
-            name_str = ""
+            percent_str = ""
 
             if is_done:
                 
@@ -68,14 +63,19 @@ class Poll:
                     percentage = round((float(num_votes) / total_votes) * 100)
                     percent_of_winner = float(num_votes) / num_winner_votes
 
-                    for j in range(round(percent_of_winner*30)):
-                        name_str += "\|"
+                    for _ in range(round(percent_of_winner*30)):
+                        percent_str += "\|"
 
-                    name_str += f"  {str(percentage)}% ({num_votes})"
+                    percent_str += f"  {str(percentage)}% ({num_votes})"
+
+                    if (num_votes == num_winner_votes):
+                        percent_str = f"**{percent_str}**"
                 else:
-                    name_str = "0%"
+                    percent_str = "0%"
 
-            embed.add_field(name=name_str, value=format_emoji(i, self._options[i]), inline=False)
+            option_str = format_emoji(i, self._options[i])
+
+            embed.add_field(name=option_str, value=percent_str, inline=False)
         
         return embed
 
@@ -111,10 +111,9 @@ class PollModal(discord.ui.Modal, title='Create a Poll!'):
     _option2Input = discord.ui.TextInput(label="Option 2", max_length=100)
     _option3Input = discord.ui.TextInput(label="Option 3", placeholder="(Optional)", required=False, max_length=100)
     _option4Input = discord.ui.TextInput(label="Option 4", placeholder="(Optional)", required=False, max_length=100)
-    _exp_min = 0
     
     def set_exp_min(self, exp_min):
-        self._exp_min = exp_min
+        self._exp_min : int = exp_min
 
     async def on_submit(self, interaction: discord.Interaction):
         options = [
@@ -146,9 +145,9 @@ class PollCog(Cog):
         self.bot = bot
 
     @discord.app_commands.command(description="Brings up a popup to create a poll in the current channel.")
-    @discord.app_commands.rename(exp_min="expires_after")
+    @discord.app_commands.rename(exp_min="expires_after_minutes")
     @discord.app_commands.describe(exp_min="The number of minutes after the poll is created that responses will no longer be accepted")
-    async def poll(self, interaction:discord.Interaction, exp_min:int):
+    async def poll(self, interaction:discord.Interaction, exp_min:discord.app_commands.Range[int, 1, 180]):
         print("/poll used")
         modal = PollModal()
         modal.set_exp_min(exp_min)
