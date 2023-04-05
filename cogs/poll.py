@@ -17,9 +17,8 @@ def format_emoji(index:int, str:str):
 
 class Poll:
     
-    def __init__(self, user:discord.User, message : discord.Message, header:str, options:List[str], end_timestamp : int):
+    def __init__(self, user:discord.User, header:str, options:List[str], end_timestamp : int):
         self._user : discord.User = user
-        self._message : discord.Message = message
         self._header : str = header
         self._options : List[str] = [option for option in options if len(option.split()) > 0]
         self._end_timestamp : int = end_timestamp
@@ -80,20 +79,27 @@ class Poll:
         return embed
 
     def get_view(self) -> discord.ui.View:
-        select = PollSelect(poll=self, message=self._message)
+        select = PollSelect(poll=self)
         for i in range(len(self._options)):
             select.add_option(label=self._options[i], value=f"{i}", emoji=poll_emojis[i])
         
         view = discord.ui.View(timeout=None).add_item(select)
         return view
 
+    def print_results(self):
+        print(f"Poll ended with {len(self._user_votes)} votes, results:")
+        print(f"")
+        for i in range(len(self._options)):
+            num_votes = sum(i == index for index in self._user_votes.values())
+            print(f"--({num_votes}) {self._options[i]}")
+        
+
 
 
 class PollSelect(discord.ui.Select):
 
-    def __init__(self, poll : Poll, message: discord.Message):
+    def __init__(self, poll : Poll):
         self._poll = poll
-        self._message = message
         super().__init__(placeholder="Select an option!")
 
     async def callback(self, interaction:discord.Interaction):
@@ -123,14 +129,15 @@ class PollModal(discord.ui.Modal, title='Create a Poll!'):
             self._option4Input.value
         ]
         
-        await interaction.response.send_message(content="Generating poll, standby...")
-        
-        message : discord.Message = await interaction.original_response()
+        await utils.respond(interaction, "Generating poll, standby...", ephemeral=True)
 
         timestamp = utils.get_timestamp(utils.utcnow() + timedelta(minutes=self._exp_min))
-        poll = Poll(interaction.user, message, self._headerInput.value, options, timestamp)
+        poll = Poll(interaction.user, self._headerInput.value, options, timestamp)
 
-        await message.edit(content=poll.get_message_content(), embed=poll.get_embed(), view=poll.get_view())
+        message : discord.Message = await interaction.channel.send(content=poll.get_message_content(), embed=poll.get_embed(), view=poll.get_view())
+
+        original_response = await interaction.original_response()
+        await original_response.delete()
 
         print(f"Poll created, num options: {len(poll._options)}")
 
@@ -138,7 +145,10 @@ class PollModal(discord.ui.Modal, title='Create a Poll!'):
 
         print(f"Poll expired, total votes: {len(poll._user_votes)}")
 
-        await message.edit(content=poll.get_message_content(), embed=poll.get_embed(), view=None)
+        channel = message.channel
+
+        await message.delete()
+        await channel.send(content=poll.get_message_content(), embed=poll.get_embed())
 
 class PollCog(Cog):
     def __init__(self, bot: Bot):
