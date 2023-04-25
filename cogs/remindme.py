@@ -4,16 +4,31 @@ from discord.utils import MISSING
 from discord.ext.commands import Cog, Bot
 from discord.ext import tasks
 from typing import List, Dict, Optional
-from utils import utils
+from utils import utils, db
 from datetime import datetime, timezone, timedelta
 import re
 import asyncio
+import sqlite3
 
 
 MIN_TIME = datetime(1970, 1, 1, tzinfo=timezone.utc)
 def get_time_ident(datetime : datetime) -> int:
     offset = datetime - MIN_TIME
     return int(offset.total_seconds() / 60)
+
+connection : sqlite3.Connection = sqlite3.connect("data/remindme/reminders.db")
+
+db.execute_command(connection, """
+    CREATE TABLE IF NOT EXISTS "reminders" (
+        ident INTEGER,
+        user_id INTEGER,
+        text TEXT,
+        message_id INTEGER,
+        channel_id INTEGER,
+        url TEXT,
+        timestamp INTEGER
+    )
+""")
 
 def get_input_time(time_str:str) -> Optional[datetime]:
     if (re.fullmatch(r"^(\d+d\s?)?(\d+h\s?)?(\d+m)?$", time_str)):
@@ -27,7 +42,10 @@ def get_input_time(time_str:str) -> Optional[datetime]:
         days = get_duration_component("d", time_str)
         hours = get_duration_component("h", time_str)
         minutes = get_duration_component("m", time_str)
-        return utils.utcnow() + timedelta(days=days, hours=hours, minutes=minutes)
+        
+        # Check for time > 0
+        if days + hours + minutes > 0:
+            return utils.utcnow() + timedelta(days=days, hours=hours, minutes=minutes)
     
     return None
 
@@ -37,25 +55,43 @@ def get_input_time(time_str:str) -> Optional[datetime]:
 class RemindMeData:
 
     class MessageData:
-        def __init__(self, message:discord.Message):
+        def __init__(self):
+            self.message_id:int = 0
+            self.channel_id:int = 0
+            self.url:str = ""
+        
+        def from_message(self, message:discord.Message):
             self.message_id = message.id
             self.channel_id = message.channel.id
             self.url = message.jump_url
+            return self
         
+        def from_data(self, message_id:int, channel_id:int, url:str):
+            self.message_id = message_id
+            self.channel_id = channel_id
+            self.url = url
+            return self
+
         async def get_message(self, client:discord.Client) -> Optional[discord.Message]:
             channel = await client.fetch_channel(self.channel_id)
             return await channel.fetch_message(self.message_id)
 
 
 
-    def __init__(self, user_id:int, text: Optional[str] = None, message: Optional[discord.Message] = None):
+    def __init__(self, user_id:int, text: Optional[str] = None, message: Optional[discord.Message] = None, message_data: Optional[MessageData] = None):
         self.ident : int = 0
+        self.timestamp : int = 0
         self.user_id = user_id
         self.text : Optional[str] = text
-        self.message : Optional[RemindMeData.MessageData] = RemindMeData.MessageData(message) if message is not None else None
-    
-    def set_remind_time(self, time:datetime):
+        self.message = None
+        if message_data is not None:
+            self.message = message_data
+        elif message is not None:
+            self.message = RemindMeData.MessageData().from_message(message)
+
+    def set_ident_from_remind_time(self, time:datetime):
         self.ident = get_time_ident(time)
+        self.timestamp = utils.get_timestamp(time)
 
     async def get_embeds(self, client:discord.Client) -> Optional[List[discord.Embed]]:
         if self.text != None:
@@ -76,16 +112,96 @@ class RemindMeData:
     
 # -----------------------------
 
+def add_reminder_to_db(reminder:RemindMeData):
+    message_id = None
+    channel_id = None
+    url = None
+    if reminder.message is not None:
+        message_id = reminder.message.message_id
+        channel_id = reminder.message.channel_id
+        url = reminder.message.url
+    db.execute_command(connection, """
+        INSERT INTO reminders
+            (ident, user_id, text, message_id, channel_id, url, timestamp)
+            VALUES (?,?,?,?,?,?,?)
+    """, (reminder.ident, reminder.user_id, reminder.text, message_id, channel_id, url, reminder.timestamp))
+
+def _db_reminder_to_data(entry) -> RemindMeData:
+    ident = entry[0]
+    user_id = entry[1]
+    text = entry[2]
+    message_id = entry[3]
+    channel_id = entry[4]
+    url = entry[5]
+    timestamp = entry[6]
+
+    message = None
+    if message_id is not None:
+        message = RemindMeData.MessageData().from_data(message_id, channel_id, url)
+    data = RemindMeData(user_id, text, message_data=message)
+    data.ident = ident
+    data.timestamp = timestamp
+    return data
+
+
+def _db_reminders_to_data(db_data) -> List[RemindMeData]:
+    data_list : List[RemindMeData] = []
+    
+    for entry in db_data:
+        data_list.append(_db_reminder_to_data(entry))
+
+    return data_list
+        
+
+def _clear_old_reminders(ident:int):
+    db.execute_command(connection, """
+        DELETE FROM reminders
+        WHERE ident <= ?
+    """, (ident,))
+
+def get_reminders_for_ident(ident:int) -> List[RemindMeData]:
+    data = db.get_data(connection, """
+        SELECT
+            *
+        FROM 
+            reminders
+        WHERE
+            ident = ?
+    """, (ident,))
+    data_list = _db_reminders_to_data(data)
+    _clear_old_reminders(ident)
+    return data_list
+    
+def get_reminder_with_id(id:int) -> RemindMeData:
+    entry = db.get_single_row(connection, """
+        SELECT
+            *
+        FROM
+            reminders
+        WHERE
+            rowid = ?
+        LIMIT 1
+    """,(id,))
+    return _db_reminder_to_data(entry)
+
+# Returns only the db row identifiers for a given user
+def get_reminder_ids_for_user(user_id:int) -> List[int]:
+    data = db.get_data(connection, """
+        SELECT
+            rowid
+        FROM 
+            reminders
+        WHERE
+            user_id = ?
+        ORDER BY
+            ident
+    """, (user_id,))
+
+    return [ x[0] for x in data ]
 
 class RemindMeContext:
     def __init__(self, message:discord.InteractionMessage):
         self.message = message
-
-
-# -----------------------------
-
-
-_all_reminders : List[RemindMeData] = []
 
 # -----------------------------
 
@@ -119,8 +235,8 @@ class RemindMeView(discord.ui.View):
             await interaction.response.send_modal(modal)
         else:
             remind_date = utils.utcnow() + timedelta(minutes=int(select.values[0]))
-            self.data.set_remind_time(remind_date)
-            _all_reminders.append(self.data)
+            self.data.set_ident_from_remind_time(remind_date)
+            add_reminder_to_db(self.data)
             await self.context.message.edit(content=f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(remind_date)}:f>", embeds=await self.data.get_embeds(interaction.client), view=self.data.get_original_message_view())
 
 class RemindMeLaterView(discord.ui.View):
@@ -147,7 +263,7 @@ class RemindMeLaterView(discord.ui.View):
         await self.reset_message_view()
 
     async def reset_message_view(self):
-        await self.message.edit(view=utils.get_view_for_url("Original Message", self.data.message.url))
+        await self.message.edit(view=self.data.get_original_message_view())
 
 
 # -----------------------------
@@ -165,12 +281,12 @@ class RemindMeModal(discord.ui.Modal, title="Remind Me"):
         future_time = get_input_time(input_str)
         await interaction.response.defer()
         if future_time is not None:
-            self.data.set_remind_time(future_time)
-            _all_reminders.append(self.data)
+            self.data.set_ident_from_remind_time(future_time)
+            add_reminder_to_db(self.data)
             await self.context.message.edit(content=f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(future_time)}:f>", embeds=await self.data.get_embeds(interaction.client), view=self.data.get_original_message_view())
         else:
             view = RemindMeView(self.data, self.context)
-            await self.context.message.edit(content=f"**\"{input_str}\"** doesn't follow the format `#d #h #m`. Select a valid time from the list or **Custom** to retry.", view=view, embeds=await self.data.get_embeds(interaction.client))
+            await self.context.message.edit(content=f"**\"{input_str}\"** is either invalid or doesn't follow the format `#d #h #m`. Select a valid time from the list or **Custom** to retry.", view=view, embeds=await self.data.get_embeds(interaction.client))
 
 
 # -----------------------------
@@ -194,10 +310,9 @@ class RemindMeCog(Cog):
 
     @tasks.loop(minutes=1)
     async def minute_check(self):
-        global _all_reminders
         
         curr_ident = get_time_ident(utils.utcnow())
-        curr_reminders : List[RemindMeData] = [ r for r in _all_reminders if r.ident == curr_ident ]
+        curr_reminders : List[RemindMeData] = get_reminders_for_ident(curr_ident)
 
         for reminder in curr_reminders:
             try:
@@ -208,10 +323,6 @@ class RemindMeCog(Cog):
             except Exception as e:
                 print("Error when getting reminder for message!")
                 print(e)
-
-
-        if (len(curr_reminders) > 0):
-            _all_reminders = [ r for r in _all_reminders if r.ident > curr_ident ] # remove all entries that have passed
         
 
     @minute_check.before_loop
@@ -234,8 +345,8 @@ class RemindMeCog(Cog):
         if time is not None:
             future_time = get_input_time(time)
             if future_time is not None:
-                data.set_remind_time(future_time)
-                _all_reminders.append(data)
+                data.set_ident_from_remind_time(future_time)
+                add_reminder_to_db(data)
                 await utils.respond(interaction, f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(future_time)}:f>", embeds=await data.get_embeds(self.bot))
             else:
                 await utils.respond(interaction, "There was a problem with that inputted time! Be sure to follow the format of `#d #h #m`", ephemeral=True)

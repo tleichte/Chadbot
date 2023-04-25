@@ -4,7 +4,7 @@ from discord import Intents, app_commands, Interaction
 from discord.ext import commands
 from discord.ext.commands import Bot, Command, CommandError
 import json
-from utils import utils
+from utils import utils, db
 
 # OPEN INITIAL FILES
 try:
@@ -72,8 +72,10 @@ async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool
 
         full_cog_str = f"cogs.{cog_str}"
 
-        importlib.reload(utils) # When refreshing cog, make sure latest utils functions are usable
-
+        # When refreshing cog, make sure latest utils functions are usable
+        importlib.reload(utils)
+        importlib.reload(db)
+        
         try:
             new_cog = full_cog_str not in bot.extensions.keys()
             if new_cog:
