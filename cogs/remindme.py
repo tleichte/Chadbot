@@ -172,6 +172,12 @@ def get_reminders_for_ident(ident:int) -> List[RemindMeData]:
     _clear_old_reminders(ident)
     return data_list
     
+def remove_reminder_with_id(id:int):
+    db.execute_command(connection, """
+        DELETE FROM reminders
+        WHERE rowid = ?
+    """, (id,))
+
 def get_reminder_with_id(id:int) -> RemindMeData:
     entry = db.get_single_row(connection, """
         SELECT
@@ -291,6 +297,86 @@ class RemindMeModal(discord.ui.Modal, title="Remind Me"):
 
 # -----------------------------
 
+class ActiveReminderView(discord.ui.View):
+        def __init__(self, ids: List[int], message:discord.Message):
+            super().__init__()
+            self.ids = ids
+            self.message = message
+            self.index = 0
+
+            self.url_button : discord.ui.Button = discord.ui.Button(label="Original Message", url="")
+            self.included_url_button = False
+
+            self.prev_button : discord.ui.Button = None
+            self.delete_button : discord.ui.Button = None
+            self.next_button : discord.ui.Button = None
+
+            for child in self.children:
+                if type(child) == discord.ui.Button:
+                    if child.custom_id == "prev":
+                        self.prev_button = child
+                    elif child.custom_id == "delete":
+                        self.delete_button = child
+                    elif child.custom_id == "next":
+                        self.next_button = child
+            
+            self.initial_buttons_added = False
+            self.remove_item(self.prev_button)
+            self.remove_item(self.delete_button)
+            self.remove_item(self.next_button)
+
+        @discord.ui.button(label="<", custom_id="prev", style=discord.ButtonStyle.blurple, row=1)
+        async def prev_button_callback(self, interaction:discord.Interaction, button:discord.ui.Button):
+            self.index -= 1
+            await self.update(self.message, interaction.client)
+            await interaction.response.defer()
+
+        @discord.ui.button(label="Delete", custom_id="delete", style=discord.ButtonStyle.danger, row=1)
+        async def delete_callback(self, interaction:discord.Interaction, button:discord.ui.Button):
+            id = self.ids[self.index]
+            self.ids.remove(id)
+            self.index = min(len(self.ids) - 1, self.index)
+            remove_reminder_with_id(id)
+
+            if len(self.ids) > 0:
+                await self.update(self.message, interaction.client)
+            else:
+                await self.message.edit(content="You have no reminders! Set one by using **/remind_me** or by right clicking a message and selecting **Apps -> Remind Me**", view=None, embed=None)
+            await interaction.response.defer()
+
+        @discord.ui.button(label=">", custom_id="next", style=discord.ButtonStyle.blurple, row=1)
+        async def next_button_callback(self, interaction:discord.Interaction, button:discord.ui.Button):
+            self.index += 1
+            await self.update(self.message, interaction.client)
+            await interaction.response.defer()
+
+        async def on_timeout(self):
+            await self.message.delete()
+
+        async def update(self, message:discord.InteractionMessage, client:discord.Client):
+            self.prev_button.disabled = self.index <= 0
+            self.next_button.disabled = self.index >= len(self.ids)-1
+            data = get_reminder_with_id(self.ids[self.index])
+            if data.message != None:
+                self.url_button.url = data.message.url
+                if not self.included_url_button:
+                    self.add_item(self.url_button)
+            elif self.included_url_button:
+                self.remove_item(self.url_button)
+            
+            self.included_url_button = data.message != None
+            
+            if not self.initial_buttons_added:
+                self.initial_buttons_added = True
+                self.add_item(self.prev_button)
+                self.add_item(self.delete_button)
+                self.add_item(self.next_button)
+
+            await message.edit(content=f"**Reminder {self.index+1} / {len(self.ids)}**\nYou asked me to remind you about this on <t:{data.timestamp}:f>", embeds=await data.get_embeds(client), view=self)
+
+
+# -----------------------------
+
 
 class RemindMeCog(Cog):
     def __init__(self, bot:Bot):
@@ -339,7 +425,7 @@ class RemindMeCog(Cog):
         
 
     @discord.app_commands.command(description="Creates a reminder for a given message")
-    async def remindme(self, interaction: discord.Interaction, message: str, time: str = None):
+    async def remind_me(self, interaction: discord.Interaction, message: str, time: str = None):
         await interaction.response.defer(ephemeral=True)
         data = RemindMeData(interaction.user.id, text=message)
         if time is not None:
@@ -354,6 +440,20 @@ class RemindMeCog(Cog):
             context = RemindMeContext(await interaction.original_response())
             view = RemindMeView(data, context)
             await context.message.edit(content=f"When would you like me to remind you about this?", embeds= await data.get_embeds(self.bot), view=view)
+
+
+    @discord.app_commands.command(description="Shows all your currently active reminders")
+    async def my_reminders(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        ids : List[int] = get_reminder_ids_for_user(interaction.user.id)
+        if len(ids) == 0:
+            await utils.respond(interaction, "You have no reminders! Set one by using **/remind_me** or by right clicking a message and selecting **Apps -> Remind Me**")
+        else:
+            message = await interaction.original_response()
+            view = ActiveReminderView(ids, message)
+            await utils.respond(interaction, "Fetching your reminders...", view=view)
+            await view.update(message, interaction.client)
+
 
 
 # -----------------------------
