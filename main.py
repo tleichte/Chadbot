@@ -65,7 +65,7 @@ async def ping(interaction: Interaction):
 @bot.tree.command(description="(Admin) Refreshes a cog if loaded. If a cog exists but is unloaded, it is loaded.")
 @app_commands.rename(cog_str="cog_name")
 @app_commands.describe(cog_str="Name of cog to refresh", refresh_tree="Whether or not to re-sync command tree when a loaded cog is refreshed (new cogs automatically refresh tree)")
-async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool):
+async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool = False):
     if await bot.is_owner(interaction.user):
         await interaction.response.defer(ephemeral=True)
         print(f"Owner verified, refreshing cog {cog_str}")

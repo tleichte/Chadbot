@@ -1,4 +1,3 @@
-import json
 import discord
 from discord.utils import MISSING
 from discord.ext.commands import Cog, Bot
@@ -9,20 +8,25 @@ from datetime import datetime, timezone, timedelta
 import re
 import asyncio
 import sqlite3
-
+import os
 
 MIN_TIME = datetime(1970, 1, 1, tzinfo=timezone.utc)
 def get_time_ident(datetime : datetime) -> int:
     offset = datetime - MIN_TIME
     return int(offset.total_seconds() / 60)
 
-connection : sqlite3.Connection = sqlite3.connect("data/remindme/reminders.db")
+db_folder_path = "data/remindme"
+db_path = "data/remindme/reminders.db"
+if not os.path.exists(db_folder_path):
+    os.makedirs(db_folder_path)
+
+connection : sqlite3.Connection = sqlite3.connect(db_path)
 
 db.execute_command(connection, """
     CREATE TABLE IF NOT EXISTS "reminders" (
         ident INTEGER,
         user_id INTEGER,
-        text TEXT,
+        note TEXT,
         message_id INTEGER,
         channel_id INTEGER,
         url TEXT,
@@ -49,6 +53,8 @@ def get_input_time(time_str:str) -> Optional[datetime]:
     
     return None
 
+def get_input_time(days:int, hours:int, minutes:int):
+    return utils.utcnow() + timedelta(days=days, hours=hours, minutes=minutes)
 
 # -----------------------------
 
@@ -78,11 +84,11 @@ class RemindMeData:
 
 
 
-    def __init__(self, user_id:int, text: Optional[str] = None, message: Optional[discord.Message] = None, message_data: Optional[MessageData] = None):
+    def __init__(self, user_id:int, note: Optional[str] = None, message: Optional[discord.Message] = None, message_data: Optional[MessageData] = None):
         self.ident : int = 0
         self.timestamp : int = 0
         self.user_id = user_id
-        self.text : Optional[str] = text
+        self.note : Optional[str] = note
         self.message = None
         if message_data is not None:
             self.message = message_data
@@ -94,9 +100,9 @@ class RemindMeData:
         self.timestamp = utils.get_timestamp(time)
 
     async def get_embeds(self, client:discord.Client) -> Optional[List[discord.Embed]]:
-        if self.text != None:
+        if self.note != None:
             embed : discord.Embed = discord.Embed()
-            embed.add_field(name=self.text, value="")
+            embed.add_field(name=self.note, value="")
             return [ embed ]
         elif self.message != None:
             message:discord.Message = await self.message.get_message(client)
@@ -122,14 +128,14 @@ def add_reminder_to_db(reminder:RemindMeData):
         url = reminder.message.url
     db.execute_command(connection, """
         INSERT INTO reminders
-            (ident, user_id, text, message_id, channel_id, url, timestamp)
+            (ident, user_id, note, message_id, channel_id, url, timestamp)
             VALUES (?,?,?,?,?,?,?)
-    """, (reminder.ident, reminder.user_id, reminder.text, message_id, channel_id, url, reminder.timestamp))
+    """, (reminder.ident, reminder.user_id, reminder.note, message_id, channel_id, url, reminder.timestamp))
 
 def _db_reminder_to_data(entry) -> RemindMeData:
     ident = entry[0]
     user_id = entry[1]
-    text = entry[2]
+    note = entry[2]
     message_id = entry[3]
     channel_id = entry[4]
     url = entry[5]
@@ -138,7 +144,7 @@ def _db_reminder_to_data(entry) -> RemindMeData:
     message = None
     if message_id is not None:
         message = RemindMeData.MessageData().from_data(message_id, channel_id, url)
-    data = RemindMeData(user_id, text, message_data=message)
+    data = RemindMeData(user_id, note, message_data=message)
     data.ident = ident
     data.timestamp = timestamp
     return data
@@ -215,8 +221,8 @@ class RemindMeContext:
 class RemindMeView(discord.ui.View):
     
     options : List[discord.SelectOption] = [
-        discord.SelectOption(label="5 min", value=f"{5}"),
-        discord.SelectOption(label="30 min", value=f"{30}"),
+        discord.SelectOption(label="5 minutes", value=f"{5}"),
+        discord.SelectOption(label="30 minutes", value=f"{30}"),
         discord.SelectOption(label="1 hour", value=f"{60}"),
         discord.SelectOption(label="3 hours", value=f"{3*60}"),
         discord.SelectOption(label="6 hours", value=f"{6*60}"),
@@ -275,24 +281,48 @@ class RemindMeLaterView(discord.ui.View):
 # -----------------------------
 
 
-class RemindMeModal(discord.ui.Modal, title="Remind Me"):
-    _timeInput = discord.ui.TextInput(label="Time from now (Enter in the format #d #h #m)", placeholder="1d 1h 1m")
+class RemindMeModal(discord.ui.Modal, title="When should I remind you?"):
+
+    _daysInput = discord.ui.TextInput(label="Days", placeholder="0", required=False, max_length=5)
+    _hoursInput = discord.ui.TextInput(label="Hours", placeholder="0", required=False, max_length=5)
+    _minutesInput = discord.ui.TextInput(label="Minutes", placeholder="0", required=False, max_length=5)
+    # _timeInput = discord.ui.TextInput(label="Format as #d #h #m (i.e. 5m | 3h 15m | 1d 6h)", placeholder="0d 0h 0m")
 
     def set_data(self, data:RemindMeData, context:RemindMeContext):
         self.data = data
         self.context = context
 
     async def on_submit(self, interaction:discord.Interaction):
-        input_str = self._timeInput.value
-        future_time = get_input_time(input_str)
+
+        def check_input(input:discord.ui.TextInput) -> int:
+            if len(input.value.strip()) == 0:
+                return 0
+            if input.value.isdigit():
+                return int(input.value)
+
+            return None
+
+        days = check_input(self._daysInput)
+        hours = check_input(self._hoursInput)
+        minutes = check_input(self._minutesInput)
+
+        is_invalid : bool = False
+        is_invalid = is_invalid or days is None
+        is_invalid = is_invalid or hours is None
+        is_invalid = is_invalid or minutes is None
+        is_invalid = is_invalid or days + hours + minutes <= 0
+        
         await interaction.response.defer()
-        if future_time is not None:
+
+        if is_invalid:
+            out_str = f"{0 if days is None else days}d {self._hoursInput.value}h {self._minutesInput.value}m"
+            view = RemindMeView(self.data, self.context)
+            await self.context.message.edit(content=f"The entered time was not valid. Select a valid time from the list or **Custom** to retry.", view=view, embeds=await self.data.get_embeds(interaction.client))
+        else:
+            future_time = get_input_time(days, hours, minutes)
             self.data.set_ident_from_remind_time(future_time)
             add_reminder_to_db(self.data)
             await self.context.message.edit(content=f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(future_time)}:f>", embeds=await self.data.get_embeds(interaction.client), view=self.data.get_original_message_view())
-        else:
-            view = RemindMeView(self.data, self.context)
-            await self.context.message.edit(content=f"**\"{input_str}\"** is either invalid or doesn't follow the format `#d #h #m`. Select a valid time from the list or **Custom** to retry.", view=view, embeds=await self.data.get_embeds(interaction.client))
 
 
 # -----------------------------
@@ -389,7 +419,6 @@ class RemindMeCog(Cog):
         self.minute_check.start()
     
     def cog_unload(self):
-        print("Remind me cog unloaded!")
         if self.minute_check.is_running():
             self.minute_check.cancel()
         self.bot.tree.remove_command(self.ctx_menu)
@@ -424,18 +453,21 @@ class RemindMeCog(Cog):
         await context.message.edit(content="When would you like me to remind you about this message?", embeds= await data.get_embeds(self.bot), view=view)
         
 
-    @discord.app_commands.command(description="Creates a reminder for a given message")
-    async def remind_me(self, interaction: discord.Interaction, message: str, time: str = None):
+    @discord.app_commands.command(description="Creates a reminder for a given note")
+    async def remind_me(self, interaction: discord.Interaction, note: str, days: discord.app_commands.Range[int, 1, 1000] = None, hours: discord.app_commands.Range[int, 1, 1000] = None, minutes: discord.app_commands.Range[int, 1, 1000] = None):
         await interaction.response.defer(ephemeral=True)
-        data = RemindMeData(interaction.user.id, text=message)
-        if time is not None:
-            future_time = get_input_time(time)
-            if future_time is not None:
-                data.set_ident_from_remind_time(future_time)
-                add_reminder_to_db(data)
-                await utils.respond(interaction, f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(future_time)}:f>", embeds=await data.get_embeds(self.bot))
-            else:
-                await utils.respond(interaction, "There was a problem with that inputted time! Be sure to follow the format of `#d #h #m`", ephemeral=True)
+        data = RemindMeData(interaction.user.id, note=note)
+        if days is not None or hours is not None or minutes is not None:
+            days = days or 0
+            hours = hours or 0
+            minutes = minutes or 0
+            future_time = get_input_time(days, hours, minutes)
+            # if future_time is not None:
+            data.set_ident_from_remind_time(future_time)
+            add_reminder_to_db(data)
+            await utils.respond(interaction, f"Gotcha, I'll remind you about this on <t:{utils.get_timestamp(future_time)}:f>", embeds=await data.get_embeds(self.bot))
+            # else:
+            #     await utils.respond(interaction, "There was a problem with that inputted time! Be sure to follow the format of `#d #h #m`", ephemeral=True)
         else:
             context = RemindMeContext(await interaction.original_response())
             view = RemindMeView(data, context)
