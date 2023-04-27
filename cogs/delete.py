@@ -14,23 +14,18 @@ except Exception as e:
 
 
 class DeleteCog(Cog):
-    def __init__(self, init_bot: Bot, emoji_id: int):
-        self.bot = init_bot
-        self.emoji_id = emoji_id
+    def __init__(self, bot: Bot):
+        self.bot = bot
 
     @Cog.listener()
     async def on_reaction_add(self, added_reaction: Reaction, usr):
     
         msg: Message = added_reaction.message
 
-        print("Delete cog: reaction added")
-
         if type(added_reaction.emoji) is str:
-            print("--String reaction added")
             return
 
-        if added_reaction.emoji.id != self.emoji_id:
-            print(f"--Added reaction isn't delete emoji (added: {added_reaction.emoji.id}, delete: {self.emoji_id})")
+        if added_reaction.emoji.id != config["emoji_id"]:
             return
 
         print(f"Delete emoji added to message {msg.id} from {msg.author.display_name} (count: {added_reaction.count})")
@@ -47,5 +42,5 @@ class DeleteCog(Cog):
 
 
 async def setup(bot : Bot):
-    await bot.add_cog(DeleteCog(bot, config["emoji_id"]))
+    await bot.add_cog(DeleteCog(bot))
 
