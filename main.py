@@ -4,7 +4,7 @@ from discord import Intents, app_commands, Interaction
 from discord.ext import commands
 from discord.ext.commands import Bot, Command, CommandError
 import json
-from utils import utils
+from utils import utils, db
 
 # OPEN INITIAL FILES
 try:
@@ -65,15 +65,17 @@ async def ping(interaction: Interaction):
 @bot.tree.command(description="(Admin) Refreshes a cog if loaded. If a cog exists but is unloaded, it is loaded.")
 @app_commands.rename(cog_str="cog_name")
 @app_commands.describe(cog_str="Name of cog to refresh", refresh_tree="Whether or not to re-sync command tree when a loaded cog is refreshed (new cogs automatically refresh tree)")
-async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool):
+async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool = False):
     if await bot.is_owner(interaction.user):
         await interaction.response.defer(ephemeral=True)
         print(f"Owner verified, refreshing cog {cog_str}")
 
         full_cog_str = f"cogs.{cog_str}"
 
-        importlib.reload(utils) # When refreshing cog, make sure latest utils functions are usable
-
+        # When refreshing cog, make sure latest utils functions are usable
+        importlib.reload(utils)
+        importlib.reload(db)
+        
         try:
             new_cog = full_cog_str not in bot.extensions.keys()
             if new_cog:
