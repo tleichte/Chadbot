@@ -24,7 +24,21 @@ def get_emoji_name(emoji_obj):
     return emoji_obj.name
 
 
+class CreateARoleModal(discord.ui.Modal, title="Create a Role"):
+    _nameInput = discord.ui.TextInput(label="Role Name", placeholder="Wumpuses", max_length=32)
+    _descriptionInput = discord.ui.TextInput(label="Role Description", placeholder="People who like discord")
+
+    def set_callback(self, callback):
+        self.callback = callback
+
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self._nameInput.value
+        description = self._descriptionInput.value
+
+        await self.callback(interaction, name, description)
+
 class RolesCog(Cog):
+
     def __init__(self, bot: Bot):
         self.bot = bot
         self.saved_roles = {}
@@ -301,17 +315,13 @@ class RolesCog(Cog):
             await utils.respond_error(interaction)
 
 
-    @role_group.command(description="Starts a vote to add a new role")
-    @app_commands.rename(
-        role_str = "role",
-        role_desc = "description"
-    )
-    @app_commands.describe(
-        role_str="Name of role to add",
-        role_desc="Description of role to add"
-    )
-    async def add(self, interaction: Interaction, role_str: str, role_desc: str):
-        print(f"Add command from {interaction.user.display_name}")
+    @role_group.command(description="Brings up the Create a Role modal. Users will vote on whether to add the new role.")
+    async def add(self, interaction:discord.Interaction):
+       modal = CreateARoleModal()
+       modal.set_callback(self.inner_add_role)
+       await interaction.response.send_modal(modal)
+
+    async def inner_add_role(self, interaction: Interaction, role_str: str, role_desc: str):
         if role_str in self.saved_roles:
             await utils.respond(interaction, f"A role with the name **{role_str}** already exists!", ephemeral=True)
             return
@@ -347,6 +357,7 @@ class RolesCog(Cog):
         self.saved_votes[role_str] = saved_obj
         await self.update_files_and_messages()
         await utils.respond(interaction, f"You started a vote for **{role_str}** in {role_channel.mention}!")
+
 
     # noinspection PyBroadException
     @role_group.command(description="Cancels a vote (if you started vote or are admin)")
@@ -451,7 +462,7 @@ class RolesCog(Cog):
                                 await self.update_files_and_messages()
 
                                 out_msg: Message = await role_channel.fetch_message(self.saved_roles[vote_role]["message_id"])
-                                await out_msg.reply(f"Added the new role **{vote_role}** here!", delete_after=delete_time)
+                                await out_msg.channel.send(f"Added the new role **{vote_role}** here!\n{out_msg.jump_url}", delete_after=delete_time)
                             break
                 else:
                     print("--Wrong reaction...")
@@ -480,24 +491,24 @@ class RolesCog(Cog):
         await self.bot.wait_until_ready()
 
         role_channel: TextChannel = self.bot.get_channel(payload.channel_id)
-        role_message: Message = await role_channel.fetch_message(payload.message_id)
-
-        # noinspection PyBroadException
-        try:
-            role_member: Member = await role_channel.guild.fetch_member(payload.user_id)
-        except Exception:
-            print("Error when getting role member!")
-            traceback.print_exc()
-            return
 
         print("--Finding roles")
         for saved_message_id in self.saved_messages:
-            if int(saved_message_id) == role_message.id:
+            if int(saved_message_id) == payload.message_id:
                 emoji_name = get_emoji_name(payload.emoji)
                 if emoji_name in self.saved_messages[saved_message_id]:
                     print("--Found emoji in saved message")
-                    role_obj: Role = discord.utils.get(role_message.guild.roles,
+                    role_obj: Role = discord.utils.get(role_channel.guild.roles,
                                                        name=self.saved_messages[saved_message_id][emoji_name])
+                    
+                    # noinspection PyBroadException
+                    try:
+                        role_member: Member = await role_channel.guild.fetch_member(payload.user_id)
+                    except Exception:
+                        print("Error when getting role member!")
+                        traceback.print_exc()
+                        return
+                    
                     await role_member.remove_roles(role_obj)
                 return
 
@@ -540,6 +551,8 @@ class RolesCog(Cog):
         self.saved_messages[str(str(new_message.id))][config["Emojis"][0]] = role_str
 
     async def update_files_and_messages(self):
+
+        #TODO utilize versioning to prevent as many API calls
 
         print("Updating messages...")
         role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
