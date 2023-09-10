@@ -436,8 +436,8 @@ class RemindMeCog(Cog):
                 message:discord.Message = await user.send("You asked me to remind you about this!", embeds=await reminder.get_embeds(self.bot), view=view)
                 view.set_message(message)
             except Exception as e:
-                print("Error when getting reminder for message!")
-                print(e)
+                utils.log("REMIND ME", "Error when getting reminder for message!")
+                utils.log("REMIND ME", e)
         
 
     @minute_check.before_loop

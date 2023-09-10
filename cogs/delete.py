@@ -8,8 +8,8 @@ try:
     with open("configs/delete.json", 'r') as config_json:
         config = json.load(config_json)
 except Exception as e:
-    print(e)
-    print("Failed to load delete cog! Config not found!")
+    utils.log("DELETE", e)
+    utils.log("DELETE", "Failed to load cog! Config not found!")
     exit(-1)
 
 
@@ -17,10 +17,12 @@ class DeleteCog(Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @Cog.listener()
+    @Cog.listener("on_reaction_add")
     async def on_reaction_add(self, added_reaction: Reaction, usr):
     
         msg: Message = added_reaction.message
+
+        utils.log("DELETE", f"Emoji added!")
 
         if type(added_reaction.emoji) is str:
             return
@@ -28,7 +30,7 @@ class DeleteCog(Cog):
         if added_reaction.emoji.id != config["emoji_id"]:
             return
 
-        print(f"Delete emoji added to message {msg.id} from {msg.author.display_name} (count: {added_reaction.count})")
+        utils.log("DELETE", f"Delete emoji added to message {msg.id} from {msg.author.display_name} (count: {added_reaction.count})")
 
         if added_reaction.count < config["count"]:
             return
@@ -37,7 +39,7 @@ class DeleteCog(Cog):
         if msg.created_at < now - timedelta(days = 3):
             return
 
-        print("Reached count! Deleting message.")
+        utils.log("DELETE", "Reached count! Deleting message.")
         await msg.delete()
 
 

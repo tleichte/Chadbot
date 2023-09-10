@@ -14,8 +14,8 @@ try:
     with open("configs/tabletop.json", 'r') as config_json:
         config = json.load(config_json)
 except Exception as e:
-    print(e)
-    print("Failed to load tabletop cog! Config not found!")
+    utils.log("TABLETOP", e)
+    utils.log("TABLETOP", "Failed to load tabletop cog! Config not found!")
     exit(-1)
 
 db_folder_path = "data/tabletop"

@@ -87,11 +87,10 @@ class Poll:
         return view
 
     def print_results(self):
-        print(f"Poll ended with {len(self._user_votes)} votes, results:")
-        print(f"")
+        utils.log("POLL", f"Poll ended with {len(self._user_votes)} votes, results:")
         for i in range(len(self._options)):
             num_votes = sum(i == index for index in self._user_votes.values())
-            print(f"--({num_votes}) {self._options[i]}")
+            utils.log("POLL", f"--({num_votes}) {self._options[i]}")
         
 
 
@@ -139,11 +138,11 @@ class PollModal(discord.ui.Modal, title='Create a Poll!'):
         original_response = await interaction.original_response()
         await original_response.delete()
 
-        print(f"Poll created, num options: {len(poll._options)}")
+        utils.log("POLL", f"Poll created, num options: {len(poll._options)}")
 
         await asyncio.sleep(self._exp_min * 60)
 
-        print(f"Poll expired, total votes: {len(poll._user_votes)}")
+        utils.log("POLL", f"Poll expired, total votes: {len(poll._user_votes)}")
 
         channel = message.channel
 
@@ -158,7 +157,7 @@ class PollCog(Cog):
     @discord.app_commands.rename(exp_min="expires_after_minutes")
     @discord.app_commands.describe(exp_min="The number of minutes after the poll is created that responses will no longer be accepted")
     async def poll(self, interaction:discord.Interaction, exp_min:discord.app_commands.Range[int, 1, 180]):
-        print("/poll used")
+        utils.log("POLL", "/poll used")
         modal = PollModal()
         modal.set_exp_min(exp_min)
         await interaction.response.send_modal(modal)

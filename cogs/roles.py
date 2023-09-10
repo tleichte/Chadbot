@@ -10,8 +10,8 @@ try:
     with open("configs/roles.json", 'r') as config_json:
         config = json.load(config_json)
 except Exception as e:
-    print(e)
-    print("Failed to load roles cog! Config not found!")
+    utils.log("ROLES", e)
+    utils.log("ROLES", "Failed to load roles cog! Config not found!")
     exit(-1)
 
 
@@ -53,40 +53,40 @@ class RolesCog(Cog):
             with open("data/roles/votes.json", 'r') as infile:
                 self.saved_votes = json.load(infile)
         except Exception as load_exception:
-            print("Failed to load roles cog when getting data!")
-            print(load_exception)
+            utils.log("ROLES", "Failed to load roles cog when getting data!")
+            utils.log("ROLES", load_exception)
             exit(-1)
 
         if self.bot.is_ready():
-            print("ON READY IN ROLES COG INIT")
+            utils.log("ROLES", "ON READY IN ROLES COG INIT")
             self.bot.loop.create_task(self.async_init())
 
     async def async_init(self):
-        print("Running Async Init for Roles")
+        utils.log("ROLES", "Running Async Init for Roles")
         try:
             role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
             role_guild: Guild = role_channel.guild
         except Exception as role_exception:
-            print("Error grabbing role channel!")
-            print(role_exception)
+            utils.log("ROLES", "Error grabbing role channel!")
+            utils.log("ROLES", role_exception)
             return
 
-        print("--Creating roles and adding to saves")
+        utils.log("ROLES", "--Creating roles and adding to saves")
         # Create roles on the server if they don't exist, add to saved messages
         for saved_role in self.saved_roles:
-            print(f"Checking role {saved_role}")
+            utils.log("ROLES", f"Checking role {saved_role}")
             if not discord.utils.get(role_guild.roles, name=saved_role):
-                print(f"--Creating role {saved_role}")
+                utils.log("ROLES", f"--Creating role {saved_role}")
                 await role_guild.create_role(name=saved_role, mentionable=True)
             if self.saved_roles[saved_role] is None:
-                print(f"--Adding role {saved_role} to saves")
+                utils.log("ROLES", f"--Adding role {saved_role} to saves")
                 await self.add_role_to_saves(saved_role, "")
 
         # save files potentially have changed here
-        print(f"Updating files and messages")
+        utils.log("ROLES", f"Updating files and messages")
         await self.update_files_and_messages()
 
-        print("Caching role members with roles")
+        utils.log("ROLES", "Caching role members with roles")
         # Cache members with given roles
         role_members = {}
         for role_member in role_guild.members:
@@ -98,12 +98,12 @@ class RolesCog(Cog):
 
         cached_members = {}
 
-        print("Looping through saved messages.")
+        utils.log("ROLES", "Looping through saved messages.")
         for message_id in self.saved_messages:
 
             # noinspection PyBroadException
             try:
-                print(f"--Grabbing message with id {int(message_id)}...")
+                utils.log("ROLES", f"--Grabbing message with id {int(message_id)}...")
                 role_message: Message = await role_channel.fetch_message(int(message_id))
                 for role_reaction in role_message.reactions:
 
@@ -114,7 +114,7 @@ class RolesCog(Cog):
 
                     role_name = self.saved_messages[message_id][emoji_name]
 
-                    print("----Grabbing role reaction users...")
+                    utils.log("ROLES", "----Grabbing role reaction users...")
                     reaction_users = [ user async for user in role_reaction.users() ]
 
                     reaction_users_ids = []
@@ -122,7 +122,7 @@ class RolesCog(Cog):
                         if type(reaction_user) is Member:
                             reaction_users_ids.append(reaction_user.id)
                         else:
-                            print(f"Found non-member reaction (User {reaction_user.name})")
+                            utils.log("ROLES", f"Found non-member reaction (User {reaction_user.name})")
                             await role_reaction.remove(reaction_user)
 
                     # Remove roles from users who've removed their reaction on a tracked message
@@ -132,15 +132,15 @@ class RolesCog(Cog):
                             try:
                                 if role_member_id not in reaction_users_ids:
                                     if role_member_id not in cached_members:
-                                        print("----Grabbing non-cached role member...")
+                                        utils.log("ROLES", "----Grabbing non-cached role member...")
                                         cached_members[role_member_id] = await role_guild.fetch_member(role_member_id)
                                             
                                     role_member: Member = cached_members[role_member_id]
                                     role_obj = discord.utils.get(role_guild.roles, name=role_name)
                                     await role_member.remove_roles(role_obj)
                             except Exception:
-                                print(f"Error when removing role from user id {role_member_id}")
-                                print(f"Exception: {traceback.print_exc()}")
+                                utils.log("ROLES", f"Error when removing role from user id {role_member_id}")
+                                utils.log("ROLES", f"Exception: {traceback.print_exc()}")
                                 continue
 
                     # Add roles from users who've added a reaction on a tracked message
@@ -151,22 +151,22 @@ class RolesCog(Cog):
                                 continue
                             if reaction_user_id not in role_members:
                                 if reaction_user_id not in cached_members:
-                                    print("----Grabbing non-cached role member...")
+                                    utils.log("ROLES", "----Grabbing non-cached role member...")
                                     cached_members[reaction_user_id] = await role_guild.fetch_member(reaction_user_id)
                                 role_member: Member = cached_members[reaction_user_id]
                                 role_obj = discord.utils.get(role_guild.roles, name=role_name)
                                 await role_member.add_roles(role_obj)
                         except Exception:
-                            print(f"Error when getting added reaction user id {reaction_user_id}")
-                            print(f"Exception: {traceback.print_exc()}")
+                            utils.log("ROLES", f"Error when getting added reaction user id {reaction_user_id}")
+                            utils.log("ROLES", f"Exception: {traceback.print_exc()}")
                             continue
 
             except Exception:
-                print(f"Error when retrieving message {message_id}")
-                print(f"Exception: {traceback.print_exc()}")
+                utils.log("ROLES", f"Error when retrieving message {message_id}")
+                utils.log("ROLES", f"Exception: {traceback.print_exc()}")
                 continue
 
-        print("Looping through saved votes.")
+        utils.log("ROLES", "Looping through saved votes.")
         votes_to_delete = []
         for vote_role in self.saved_votes:
             # noinspection PyBroadException
@@ -179,26 +179,26 @@ class RolesCog(Cog):
                         if msg_reaction.count > config["VoteCount"]:
                             votes_to_delete.append(vote_role)
                             role_guild: Guild = role_channel.guild
-                            print(f"--Creating role {vote_role}")
+                            utils.log("ROLES", f"--Creating role {vote_role}")
                             await role_guild.create_role(name=vote_role, mentionable=True)
                             await msg.delete()
                             await self.add_role_to_saves(vote_role, saved_vote["desc"])
                     else:
                         await msg.clear_reaction(msg_reaction.emoji)
             except Exception:
-                print("Error getting vote!")
-                print(f"Exception: {traceback.print_exc()}")
+                utils.log("ROLES", "Error getting vote!")
+                utils.log("ROLES", f"Exception: {traceback.print_exc()}")
 
         if len(votes_to_delete) > 0:
             for vote_to_delete in votes_to_delete:
                 self.saved_votes.pop(vote_to_delete)
             await self.update_files_and_messages()
 
-        print("Async init completed!")
+        utils.log("ROLES", "Async init completed!")
 
-    @Cog.listener()
+    @Cog.listener("on_ready")
     async def on_ready(self):
-        print("ON READY IN ROLES COG LISTENER")
+        utils.log("ROLES", "ON READY IN ROLES COG LISTENER")
         await self.async_init()
 
     # ROLE COMMANDS
@@ -339,8 +339,8 @@ class RolesCog(Cog):
             role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
         except Exception as role_exception:
             await utils.respond_error(interaction)
-            print("Error grabbing role channel!")
-            print(role_exception)
+            utils.log("ROLES", "Error grabbing role channel!")
+            utils.log("ROLES", role_exception)
             return
         
         await interaction.response.defer()
@@ -368,7 +368,7 @@ class RolesCog(Cog):
         role_str="Name of role to cancel vote"
     )
     async def cancel(self, interaction: Interaction, role_str: str):
-        print(f"Cancel command from {interaction.user.display_name}")
+        utils.log("ROLES", f"Cancel command from {interaction.user.display_name}")
         
         if role_str not in self.saved_votes:
             await utils.respond(interaction, f"No vote exists for the role **{role_str}**!", ephemeral=True)
@@ -377,7 +377,7 @@ class RolesCog(Cog):
         try:
             role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
         except Exception:
-            print("Error grabbing role channel!")
+            utils.log("ROLES", "Error grabbing role channel!")
             traceback.print_exc()
             return
 
@@ -390,7 +390,7 @@ class RolesCog(Cog):
             await msg.delete()
         except Exception:
             await utils.respond_error(interaction)
-            print("Error grabbing message!")
+            utils.log("ROLES", "Error grabbing message!")
             traceback.print_exc()
             return
 
@@ -425,18 +425,18 @@ class RolesCog(Cog):
 
     # LISTENERS
 
-    @Cog.listener()
+    @Cog.listener("on_raw_reaction_add")
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        print("Raw reaction added!")
+        utils.log("ROLES", "Raw reaction added!")
 
-        print(f"Channel id: {payload.channel_id}, Config: {config['ChannelID']}")
+        # utils.log("ROLES", f"Channel id: {payload.channel_id}, Config: {config['ChannelID']}")
         if payload.channel_id != config["ChannelID"]:
-            print("--Not equal, returning")
+            utils.log("ROLES", "--Not equal, returning")
             return
 
         role_member: Member = payload.member
         if self.bot.user.id == role_member.id:
-            print("--It was me!")
+            utils.log("ROLES", "--It was me!")
             return
 
         role_channel: TextChannel = self.bot.get_channel(payload.channel_id)
@@ -446,12 +446,12 @@ class RolesCog(Cog):
             if msg.id == self.saved_votes[vote_role]["message_id"]:
                 emoji_name = get_emoji_name(payload.emoji)
                 if emoji_name == config["VoteEmoji"]:
-                    print("--Reaction was the vote!")
+                    utils.log("ROLES", "--Reaction was the vote!")
                     for msg_reaction in msg.reactions:
                         msg_reaction_name = get_emoji_name(msg_reaction.emoji)
-                        print(f"----Msg Reaction Name: {msg_reaction_name}, emoji_name: {emoji_name}")
+                        utils.log("ROLES", f"----Msg Reaction Name: {msg_reaction_name}, emoji_name: {emoji_name}")
                         if msg_reaction_name == emoji_name:
-                            print(f"----Reaction count: {msg_reaction.count}")
+                            utils.log("ROLES", f"----Reaction count: {msg_reaction.count}")
                             if msg_reaction.count > config["VoteCount"]:  # > since the bots reaction is there too
                                 role_desc = self.saved_votes[vote_role]["desc"]
                                 self.saved_votes.pop(vote_role)
@@ -465,7 +465,7 @@ class RolesCog(Cog):
                                 await out_msg.channel.send(f"Added the new role **{vote_role}** here!\n{out_msg.jump_url}", delete_after=delete_time)
                             break
                 else:
-                    print("--Wrong reaction...")
+                    utils.log("ROLES", "--Wrong reaction...")
                     await msg.clear_reaction(payload.emoji)
                 return
 
@@ -480,24 +480,24 @@ class RolesCog(Cog):
 
         await msg.clear_reaction(payload.emoji)
 
-    @Cog.listener()
+    @Cog.listener("on_raw_reaction_remove")
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-        print("Reaction removed!")
+        utils.log("ROLES", "Reaction removed!")
 
         if payload.channel_id != config["ChannelID"]:
-            print("--Wrong channel")
+            utils.log("ROLES", "--Wrong channel")
             return
 
         await self.bot.wait_until_ready()
 
         role_channel: TextChannel = self.bot.get_channel(payload.channel_id)
 
-        print("--Finding roles")
+        utils.log("ROLES", "--Finding roles")
         for saved_message_id in self.saved_messages:
             if int(saved_message_id) == payload.message_id:
                 emoji_name = get_emoji_name(payload.emoji)
                 if emoji_name in self.saved_messages[saved_message_id]:
-                    print("--Found emoji in saved message")
+                    utils.log("ROLES", "--Found emoji in saved message")
                     role_obj: Role = discord.utils.get(role_channel.guild.roles,
                                                        name=self.saved_messages[saved_message_id][emoji_name])
                     
@@ -505,7 +505,7 @@ class RolesCog(Cog):
                     try:
                         role_member: Member = await role_channel.guild.fetch_member(payload.user_id)
                     except Exception:
-                        print("Error when getting role member!")
+                        utils.log("ROLES", "Error when getting role member!")
                         traceback.print_exc()
                         return
                     
@@ -513,10 +513,10 @@ class RolesCog(Cog):
                 return
 
     # noinspection PyBroadException
-    @Cog.listener()
+    @Cog.listener("on_member_remove")
     async def on_member_remove(self, left_member: Member):
 
-        print(f"User {left_member.display_name} left; updating messages")
+        utils.log("ROLES", f"User {left_member.display_name} left; updating messages")
         role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
 
         for message_id in self.saved_messages:
@@ -526,11 +526,11 @@ class RolesCog(Cog):
                     try:
                         await msg.remove_reaction(msg_reaction.emoji, left_member)
                     except Exception:
-                        print("Exception while removing reaction from leaving user")
-                        print(f"Exception: {traceback.print_exc()}")
+                        utils.log("ROLES", "Exception while removing reaction from leaving user")
+                        utils.log("ROLES", f"Exception: {traceback.print_exc()}")
             except Exception:
-                print(f"Exception while getting message with id {message_id}")
-                print(f"Exception: {traceback.print_exc()}")
+                utils.log("ROLES", f"Exception while getting message with id {message_id}")
+                utils.log("ROLES", f"Exception: {traceback.print_exc()}")
 
     # HELPERS
 
@@ -554,7 +554,7 @@ class RolesCog(Cog):
 
         #TODO utilize versioning to prevent as many API calls
 
-        print("Updating messages...")
+        utils.log("ROLES", "Updating messages...")
         role_channel: TextChannel = self.bot.get_channel(config["ChannelID"])
 
         messages_to_delete = []
@@ -577,7 +577,7 @@ class RolesCog(Cog):
                             has_emoji = True
                             break
                     if not has_emoji:
-                        print(f"Attempting to add emoji_id {emoji_name}")
+                        utils.log("ROLES", f"Attempting to add emoji_id {emoji_name}")
                         await msg.add_reaction(emoji_name)
                 await msg.edit(content=new_str)
 
@@ -586,13 +586,13 @@ class RolesCog(Cog):
                         await msg.clear_reaction(msg_reaction.emoji)
 
             except Exception as update_exception:
-                print(f"Error getting message ID {message_id}")
-                print(update_exception)
+                utils.log("ROLES", f"Error getting message ID {message_id}")
+                utils.log("ROLES", update_exception)
 
         for message_to_delete in messages_to_delete:
             self.saved_messages.pop(message_to_delete)
 
-        print("Updating files...")
+        utils.log("ROLES", "Updating files...")
         with open("data/roles/roles.json", 'w') as outfile:
             json.dump(self.saved_roles, outfile)
         with open("data/roles/messages.json", 'w') as outfile:

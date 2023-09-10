@@ -47,7 +47,7 @@ def get_view_for_url(label:str, url:str):
     return URLButtonView(label, url)
 
 
-def get_embeds_for_message(message: discord.Message, include_message_link:bool = False) -> List[discord.Embed]:
+def get_embeds_for_message(message: discord.Message, color: discord.Color = None) -> List[discord.Embed]:
     embeds : List[discord.Embed] = []
     embed_description = message.content
 
@@ -67,11 +67,16 @@ def get_embeds_for_message(message: discord.Message, include_message_link:bool =
                 embeds.append(embed)
     
     main_embed : discord.Embed = discord.Embed(description=embed_description, timestamp=message.created_at, url=message.jump_url)
+    if color is not None:
+        main_embed.color = color
     main_embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar)
     if only_one_image:
         main_embed.set_image(url=single_image_url)
-    if include_message_link:
-        main_embed.add_field(name="",value=f"[Original Message]({message.jump_url})")
     embeds.insert(0, main_embed)
 
     return embeds
+
+
+def log(tag:str, message:str):
+    strnow = datetime.now().strftime("%m-%d-%y %H:%M:%S")
+    print(f"[{strnow}][{tag}] - {message}")
