@@ -3,6 +3,7 @@ from discord.utils import MISSING
 from discord import Interaction
 from typing import Optional, List
 from datetime import datetime, timezone
+from enum import Enum
 
 async def respond(interaction: Interaction, out_str: str, ephemeral:bool = False, delete_after:Optional[float]=None, embed:discord.Embed = MISSING, view:discord.ui.View = MISSING, embeds:List[discord.Embed] = MISSING):
 
@@ -46,26 +47,30 @@ def get_view_for_message(message:discord.Message, label="Original Message") -> d
 def get_view_for_url(label:str, url:str):
     return URLButtonView(label, url)
 
+class AttachmentType(Enum):
+    NONE = 0
+    IMAGE = 1
+    VIDEO = 2
 
 def get_embeds_for_message(message: discord.Message, color: discord.Color = None) -> List[discord.Embed]:
     embeds : List[discord.Embed] = []
     embed_description = message.content
 
-    only_one_image = len([a for a in message.attachments if a.content_type is not None and "image" in a.content_type]) == 1
+    only_one_image = len([a for a in message.attachments if get_attachment_type(a) == AttachmentType.IMAGE]) == 1
     single_image_url : str = ""
 
     for attachment in message.attachments:
-        if attachment.content_type is not None:
-            if "video" in attachment.content_type:
-                video_name = attachment.url.split("/")[-1]
-                embed_description += f"\n[{video_name}]({attachment.url})"
-            elif "image" in attachment.content_type:
-                if only_one_image:
-                    single_image_url = attachment.url
-                else:
-                    embed:discord.Embed = discord.Embed(url=message.jump_url)
-                    embed.set_image(url=attachment.url)
-                    embeds.append(embed)
+        attachment_type = get_attachment_type(attachment)
+        if attachment_type == AttachmentType.IMAGE:
+            if only_one_image:
+                single_image_url = attachment.url
+            else:
+                embed:discord.Embed = discord.Embed(url=message.jump_url)
+                embed.set_image(url=attachment.url)
+                embeds.append(embed)
+        elif attachment_type == AttachmentType.VIDEO:
+            video_name = attachment.url.split("/")[-1]
+            embed_description += f"\n[{video_name}]({attachment.url})"
     
     main_embed : discord.Embed = discord.Embed(description=embed_description, timestamp=message.created_at, url=message.jump_url)
     if color is not None:
@@ -77,6 +82,17 @@ def get_embeds_for_message(message: discord.Message, color: discord.Color = None
 
     return embeds
 
+def get_attachment_type(attachment:discord.Attachment) -> AttachmentType:
+    if attachment.content_type is None:
+        # Dirty image checking method, no content type response header present for some dumb reason
+        lower = attachment.url.lower()
+        if lower.endswith(".png") or lower.endswith(".jpg") or lower.endswith(".jpeg") or lower.endswith(".gif") or lower.endswith(".webp"):
+            return AttachmentType.IMAGE
+    elif "image" in attachment.content_type:
+        return AttachmentType.IMAGE
+    elif "video" in attachment.content_type:
+        return AttachmentType.VIDEO
+    return AttachmentType.NONE
 
 def log(tag:str, message:str):
     strnow = datetime.now().strftime("%m-%d-%y %H:%M:%S")
