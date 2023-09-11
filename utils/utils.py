@@ -55,16 +55,17 @@ def get_embeds_for_message(message: discord.Message, color: discord.Color = None
     single_image_url : str = ""
 
     for attachment in message.attachments:
-        if "video" in attachment.content_type:
-            video_name = attachment.url.split("/")[-1]
-            embed_description += f"\n[{video_name}]({attachment.url})"
-        elif "image" in attachment.content_type:
-            if only_one_image:
-                single_image_url = attachment.url
-            else:
-                embed:discord.Embed = discord.Embed(url=message.jump_url)
-                embed.set_image(url=attachment.url)
-                embeds.append(embed)
+        if attachment.content_type is not None:
+            if "video" in attachment.content_type:
+                video_name = attachment.url.split("/")[-1]
+                embed_description += f"\n[{video_name}]({attachment.url})"
+            elif "image" in attachment.content_type:
+                if only_one_image:
+                    single_image_url = attachment.url
+                else:
+                    embed:discord.Embed = discord.Embed(url=message.jump_url)
+                    embed.set_image(url=attachment.url)
+                    embeds.append(embed)
     
     main_embed : discord.Embed = discord.Embed(description=embed_description, timestamp=message.created_at, url=message.jump_url)
     if color is not None:
