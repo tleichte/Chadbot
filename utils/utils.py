@@ -51,7 +51,7 @@ def get_embeds_for_message(message: discord.Message, color: discord.Color = None
     embeds : List[discord.Embed] = []
     embed_description = message.content
 
-    only_one_image = len([a for a in message.attachments if "image" in a.content_type]) == 1
+    only_one_image = len([a for a in message.attachments if a.content_type is not None and "image" in a.content_type]) == 1
     single_image_url : str = ""
 
     for attachment in message.attachments:
