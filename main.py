@@ -91,11 +91,11 @@ async def refresh_cog(interaction: Interaction, cog_str: str, refresh_tree: bool
             
             await utils.respond(interaction, f"Successfully refreshed cog **{cog_str}**!", ephemeral=True)
 
-        except commands.ExtensionNotFound:
+        except commands.errors.ExtensionNotFound:
             print(f"Given cog {cog_str} doesn't exist.")
             out_message = f"Cog **{cog_str}** doesn't exist! Available cogs:\n"
             for full_extension_name in bot.extensions.keys():
-                out_message += f"- {full_extension_name.removeprefix('cogs.')}\n"
+                out_message += f"- {utils.remove_prefix(full_extension_name, 'cogs.')}\n"
             await utils.respond(interaction, out_message, ephemeral=True)
 
         except Exception:

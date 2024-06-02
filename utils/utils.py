@@ -97,3 +97,8 @@ def get_attachment_type(attachment:discord.Attachment) -> AttachmentType:
 def log(tag:str, message:str):
     strnow = datetime.now().strftime("%m-%d-%y %H:%M:%S")
     print(f"[{strnow}][{tag}] - {message}")
+
+def remove_prefix(text:str, prefix:str):
+    if text.startswith(prefix):
+        return text[len(prefix):]
+    return text
